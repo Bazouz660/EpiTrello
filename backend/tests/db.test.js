@@ -1,13 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import mongoose from 'mongoose';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { connectToDatabase, disconnectFromDatabase } from '../src/config/db.js';
 
 vi.mock('../src/utils/logger.js', () => ({
   logger: {
     info: vi.fn(),
-    error: vi.fn()
-  }
+    error: vi.fn(),
+  },
 }));
 
 const originalDescriptor = Object.getOwnPropertyDescriptor(mongoose.connection, 'readyState');
@@ -15,7 +15,7 @@ const originalDescriptor = Object.getOwnPropertyDescriptor(mongoose.connection, 
 const setReadyState = (value) => {
   Object.defineProperty(mongoose.connection, 'readyState', {
     configurable: true,
-    get: () => value
+    get: () => value,
   });
 };
 

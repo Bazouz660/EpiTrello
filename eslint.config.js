@@ -30,6 +30,13 @@ export default [
         ...globals.browser,
         ...globals.es2021,
       },
+      parserOptions: {
+        ecmaVersion: 'latest',
+        sourceType: 'module',
+        ecmaFeatures: {
+          jsx: true,
+        },
+      },
     },
     plugins: {
       react: pluginReact,
@@ -84,6 +91,12 @@ export default [
           alphabetize: { order: 'asc', caseInsensitive: true },
         },
       ],
+    },
+  },
+  {
+    files: ['backend/tests/**/*.{js,jsx}'],
+    rules: {
+      'n/no-unpublished-import': 'off',
     },
   },
   prettier,
