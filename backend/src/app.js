@@ -7,6 +7,8 @@ import morgan from 'morgan';
 
 import { env } from './config/env.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandlers.js';
+import authRoutes from './routes/auth.js';
+import boardsRoutes from './routes/boards.js';
 
 const app = express();
 
@@ -22,7 +24,8 @@ app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Placeholder for future routing middleware configuration
+app.use('/api/auth', authRoutes);
+app.use('/api/boards', boardsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
