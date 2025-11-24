@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router-dom';
 import AppLayout from './App.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import BoardsPage from './pages/BoardsPage.jsx';
+import BoardViewPage from './pages/BoardViewPage.jsx';
 import HomePage from './pages/HomePage.jsx';
 import LoginPage from './pages/LoginPage.jsx';
 import NotFoundPage from './pages/NotFoundPage.jsx';
@@ -31,6 +32,10 @@ const router = createBrowserRouter([
           {
             path: 'boards',
             element: <BoardsPage />,
+          },
+          {
+            path: 'boards/:boardId',
+            element: <BoardViewPage />,
           },
         ],
       },
