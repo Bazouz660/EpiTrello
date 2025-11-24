@@ -1,18 +1,20 @@
 import jwt from 'jsonwebtoken';
-import { User } from '../models/User.js';
+
 import { env } from '../config/env.js';
+import { User } from '../models/User.js';
 
 export const authenticate = async (req, res, next) => {
   try {
     const header = req.get('Authorization') || '';
     const match = header.match(/^Bearer\s+(.+)$/i);
-    if (!match) return res.status(401).json({ message: 'Authorization header missing or malformed' });
+    if (!match)
+      return res.status(401).json({ message: 'Authorization header missing or malformed' });
 
     const token = match[1];
     let payload;
     try {
       payload = jwt.verify(token, env.JWT_SECRET);
-    } catch (err) {
+    } catch {
       return res.status(401).json({ message: 'Invalid or expired token' });
     }
 

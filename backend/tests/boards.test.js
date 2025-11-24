@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import app from '../src/app.js';
+
 import { setupTestDatabase } from './helpers/setupTestDatabase.js';
 
 setupTestDatabase();
