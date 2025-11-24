@@ -4,7 +4,7 @@ FROM node:22-alpine AS base
 WORKDIR /app
 
 FROM base AS dependencies
-COPY package.json ./
+COPY package*.json ./
 RUN npm install
 
 FROM base AS build

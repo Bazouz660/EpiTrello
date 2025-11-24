@@ -11,6 +11,15 @@ export const httpClient = axios.create({
   timeout: 5000,
 });
 
+export const setAuthToken = (token) => {
+  if (token) {
+    httpClient.defaults.headers.common.Authorization = `Bearer ${token}`;
+    return;
+  }
+
+  delete httpClient.defaults.headers.common.Authorization;
+};
+
 httpClient.interceptors.response.use(
   (response) => response,
   (error) => {
