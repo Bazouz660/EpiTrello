@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { selectAuth } from '../features/auth/authSlice.js';
 import {
@@ -256,6 +257,12 @@ const BoardsPage = () => {
                         )}
                       </div>
                       <div className="flex flex-wrap gap-3">
+                        <Link
+                          to={`/boards/${board.id}`}
+                          className="bg-primary text-primary-foreground inline-flex items-center rounded-md px-4 py-2 text-sm font-medium shadow hover:bg-blue-600"
+                        >
+                          Open board
+                        </Link>
                         <button
                           type="button"
                           onClick={() => startEditing(board)}
