@@ -1,6 +1,6 @@
+import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
-import { Board } from '../models/Board.js';
 
 const toResponse = (card) => ({
   id: card._id.toString(),

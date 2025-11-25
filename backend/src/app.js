@@ -9,8 +9,8 @@ import { env } from './config/env.js';
 import { notFoundHandler, errorHandler } from './middleware/errorHandlers.js';
 import authRoutes from './routes/auth.js';
 import boardsRoutes from './routes/boards.js';
-import listsRoutes from './routes/lists.js';
 import cardsRoutes from './routes/cards.js';
+import listsRoutes from './routes/lists.js';
 
 const app = express();
 
@@ -28,10 +28,10 @@ app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardsRoutes);
-// Lists routes
-app.use('/api/lists', listsRoutes);
 // Cards routes
 app.use('/api/cards', cardsRoutes);
+// Lists routes
+app.use('/api/lists', listsRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
