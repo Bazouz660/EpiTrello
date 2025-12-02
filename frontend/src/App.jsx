@@ -51,6 +51,11 @@ const AppLayout = () => {
               <NavLink to="/boards" className={primaryLinkClasses}>
                 Boards
               </NavLink>
+              {initialized && user && (
+                <NavLink to="/profile" className={primaryLinkClasses}>
+                  Profile
+                </NavLink>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {!initialized && (

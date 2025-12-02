@@ -20,6 +20,7 @@ EpiTrello is a Trello-inspired Kanban application that enables collaborative tas
 - Environment validation via Zod (`backend/src/config/env.js`)
 - Modular folder layout for models, routes, controllers, middleware, and utilities
 - Vitest configured for unit testing with coverage thresholds
+- Authenticated profile endpoints for reading, updating, and securing user accounts (avatars + password rotation)
 
 ### Frontend
 
@@ -27,6 +28,7 @@ EpiTrello is a Trello-inspired Kanban application that enables collaborative tas
 - Centralized store setup in `frontend/src/app/store.js`
 - Configured router with placeholder pages for upcoming features
 - Tailwind CSS ready with global styles and theme extensions
+- Dedicated profile management page with avatar upload, form validation, and password change flows
 
 ## Getting Started
 
