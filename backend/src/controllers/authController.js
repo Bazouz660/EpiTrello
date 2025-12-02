@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { User } from '../models/User.js';
 import { hashPassword, verifyPassword } from '../utils/crypto.js';
+import { isPasswordStrongEnough } from '../utils/passwordStrength.js';
 
 const signToken = (user) => {
   return jwt.sign({ sub: user._id.toString() }, env.JWT_SECRET, { expiresIn: '7d' });
@@ -14,6 +15,11 @@ export const register = async (req, res, next) => {
 
     if (!username || !email || !password) {
       return res.status(400).json({ message: 'username, email and password are required' });
+    }
+
+    const strength = isPasswordStrongEnough(password);
+    if (!strength.ok) {
+      return res.status(400).json({ message: 'Password is too weak', details: strength.feedback });
     }
 
     const existing = await User.findOne({ $or: [{ email }, { username }] }).lean();
@@ -28,12 +34,10 @@ export const register = async (req, res, next) => {
 
     const token = signToken(user);
 
-    return res
-      .status(201)
-      .json({
-        token,
-        user: { id: user._id.toString(), username: user.username, email: user.email },
-      });
+    return res.status(201).json({
+      token,
+      user: { id: user._id.toString(), username: user.username, email: user.email },
+    });
   } catch (error) {
     next(error);
   }
@@ -59,12 +63,10 @@ export const login = async (req, res, next) => {
 
     const token = signToken(user);
 
-    return res
-      .status(200)
-      .json({
-        token,
-        user: { id: user._id.toString(), username: user.username, email: user.email },
-      });
+    return res.status(200).json({
+      token,
+      user: { id: user._id.toString(), username: user.username, email: user.email },
+    });
   } catch (error) {
     next(error);
   }
