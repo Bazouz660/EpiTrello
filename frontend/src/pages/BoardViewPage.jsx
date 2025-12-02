@@ -70,10 +70,7 @@ const BoardViewPage = () => {
   const isCardModalOpen = cardModal.mode !== null;
 
   const board = boardsState.selectedBoard?.id === boardId ? boardsState.selectedBoard : null;
-  const boardBackgroundStyle = useMemo(
-    () => buildBoardBackgroundStyle(board?.background ?? defaultBoardTheme),
-    [board?.background],
-  );
+  const boardBackgroundStyle = buildBoardBackgroundStyle(board?.background ?? defaultBoardTheme);
   const boardError =
     boardsState.selectedStatus === 'failed' && boardsState.selectedError
       ? boardsState.selectedError
