@@ -72,7 +72,7 @@ const BoardViewPage = () => {
   const board = boardsState.selectedBoard?.id === boardId ? boardsState.selectedBoard : null;
   const boardBackgroundStyle = useMemo(
     () => buildBoardBackgroundStyle(board?.background ?? defaultBoardTheme),
-    [board?.background?.type, board?.background?.value, board?.background?.thumbnail],
+    [board?.background],
   );
   const boardError =
     boardsState.selectedStatus === 'failed' && boardsState.selectedError

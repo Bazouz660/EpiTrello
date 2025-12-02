@@ -1,8 +1,8 @@
 import express from 'express';
 import multer from 'multer';
 
-import { authenticate } from '../middleware/auth.js';
 import { changePassword, getProfile, updateProfile } from '../controllers/usersController.js';
+import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
