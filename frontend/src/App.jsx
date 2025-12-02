@@ -51,6 +51,11 @@ const AppLayout = () => {
               <NavLink to="/boards" className={primaryLinkClasses}>
                 Boards
               </NavLink>
+              {initialized && user && (
+                <NavLink to="/profile" className={primaryLinkClasses}>
+                  Profile
+                </NavLink>
+              )}
             </div>
             <div className="flex items-center gap-2">
               {!initialized && (
@@ -94,7 +99,7 @@ const AppLayout = () => {
           </nav>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-6 py-8">
+      <main className="px-6 py-8">
         <Outlet />
       </main>
     </div>

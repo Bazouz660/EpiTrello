@@ -10,7 +10,7 @@ const userSchema = new Schema(
       trim: true,
       minlength: 3,
       maxlength: 50,
-      unique: true
+      unique: true,
     },
     email: {
       type: String,
@@ -18,18 +18,20 @@ const userSchema = new Schema(
       lowercase: true,
       trim: true,
       unique: true,
-      match: /.+@.+\..+/
+      match: /.+@.+\..+/,
     },
     password: {
       type: String,
       required: true,
-      minlength: 12
-    }
+      minlength: 12,
+    },
+    avatarUrl: {
+      type: String,
+      trim: true,
+      default: null,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
-
-userSchema.index({ email: 1 }, { unique: true });
-userSchema.index({ username: 1 }, { unique: true });
 
 export const User = mongoose.models.User || mongoose.model('User', userSchema);

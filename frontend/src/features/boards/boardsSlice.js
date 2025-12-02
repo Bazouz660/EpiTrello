@@ -41,9 +41,13 @@ export const fetchBoards = createAsyncThunk('boards/fetchAll', async (_, { rejec
 
 export const createBoard = createAsyncThunk(
   'boards/create',
-  async ({ title, description }, { rejectWithValue }) => {
+  async ({ title, description, background }, { rejectWithValue }) => {
     try {
-      const { data } = await httpClient.post('/boards', { title, description });
+      const payload = { title, description };
+      if (background) {
+        payload.background = background;
+      }
+      const { data } = await httpClient.post('/boards', payload);
       return data.board;
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
