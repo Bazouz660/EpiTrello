@@ -20,7 +20,7 @@ const {
   mockFetchListsByBoard: vi.fn((payload) => ({ type: 'lists/fetchByBoard', meta: payload })),
   mockFetchCardsByList: vi.fn((payload) => ({ type: 'cards/fetchByList', meta: payload })),
   mockCreateList: vi.fn((payload) => ({ type: 'lists/create', payload })),
-  mockUpdateList: vi.fn(),
+  mockUpdateList: vi.fn((payload) => ({ type: 'lists/update', payload })),
   mockDeleteList: vi.fn(),
   mockCreateCard: vi.fn((payload) => ({ type: 'cards/create', payload })),
   mockUpdateCard: vi.fn(),
@@ -68,7 +68,13 @@ const renderWithRouter = () =>
 
 const buildState = () => ({
   boards: {
-    selectedBoard: { id: 'board-1', title: 'Project Eagle', description: 'Ship it' },
+    selectedBoard: {
+      id: 'board-1',
+      title: 'Project Eagle',
+      description: 'Ship it',
+      membershipRole: 'owner',
+      background: { type: 'color', value: '#0f172a' },
+    },
     selectedStatus: 'succeeded',
     selectedError: null,
   },
@@ -124,13 +130,15 @@ describe('BoardViewPage', () => {
     mockFetchCardsByList.mockClear();
     mockCreateList.mockClear();
     mockCreateCard.mockClear();
+    mockUpdateList.mockClear();
+    mockUpdateCard.mockClear();
   });
 
   it('renders the board header, lists, and cards from state', () => {
     renderWithRouter();
 
     expect(screen.getByRole('heading', { name: 'Project Eagle' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'To do' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /to do/i })).toBeInTheDocument();
     expect(screen.getByText('Set up CI')).toBeInTheDocument();
     expect(screen.getByText('Add lint step')).toBeInTheDocument();
   });
@@ -148,14 +156,15 @@ describe('BoardViewPage', () => {
     expect(mockDispatch).toHaveBeenCalledTimes(1);
   });
 
-  it('submits the add card form for the active list', async () => {
+  it('submits the add card form through the modal', async () => {
     const user = userEvent.setup();
     renderWithRouter();
 
     mockDispatch.mockClear();
-    await user.type(screen.getByLabelText('Card title'), 'Draft brief');
+    await user.click(screen.getByRole('button', { name: /\+\s*add card/i }));
+    await user.type(screen.getByLabelText('Title'), 'Draft brief');
     await user.type(screen.getByLabelText('Description'), 'Outline the plan');
-    await user.click(screen.getByRole('button', { name: 'Add card' }));
+    await user.click(screen.getByRole('button', { name: 'Create card' }));
 
     expect(mockCreateCard).toHaveBeenCalledWith({
       list: 'list-1',
@@ -163,5 +172,44 @@ describe('BoardViewPage', () => {
       description: 'Outline the plan',
     });
     expect(mockDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('submits edits for an existing card from the modal', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    mockDispatch.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+    const titleInput = screen.getByLabelText('Title');
+    expect(titleInput).toHaveValue('Set up CI');
+
+    await user.clear(titleInput);
+    await user.type(titleInput, 'Set up CI - updated');
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(mockUpdateCard).toHaveBeenCalledWith({
+      id: 'card-1',
+      changes: {
+        title: 'Set up CI - updated',
+        description: 'Add lint step',
+      },
+    });
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('allows inline editing of list titles', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await user.click(screen.getByRole('button', { name: /to do/i }));
+    const input = screen.getByLabelText('Edit list title');
+    await user.clear(input);
+    await user.type(input, 'Production ready');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(mockUpdateList).toHaveBeenCalledWith({
+      id: 'list-1',
+      changes: { title: 'Production ready' },
+    });
   });
 });

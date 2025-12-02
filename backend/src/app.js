@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import boardsRoutes from './routes/boards.js';
 import cardsRoutes from './routes/cards.js';
 import listsRoutes from './routes/lists.js';
+import usersRoutes from './routes/users.js';
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use('/api/boards', boardsRoutes);
 app.use('/api/cards', cardsRoutes);
 // Lists routes
 app.use('/api/lists', listsRoutes);
+app.use('/api/users', usersRoutes);
 
 app.use(notFoundHandler);
 app.use(errorHandler);

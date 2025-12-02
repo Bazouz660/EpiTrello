@@ -10,7 +10,7 @@ setupTestDatabase();
 const registerPayload = {
   username: 'testuser',
   email: 'test@example.com',
-  password: 'SuperSecurePass1',
+  password: 'G*9vL!7rQ#5xZp1@',
 };
 
 const registerUser = async (payload = registerPayload) => {
@@ -37,6 +37,17 @@ describe('Authentication API', () => {
 
     expect(response.status).toBe(409);
     expect(response.body.message).toMatch(/already exists/i);
+  });
+
+  it('rejects registrations with weak passwords', async () => {
+    const response = await registerUser({
+      username: 'weakling',
+      email: 'weak@example.com',
+      password: 'password123',
+    });
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/too weak/i);
   });
 
   it('authenticates an existing user with valid credentials', async () => {

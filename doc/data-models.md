@@ -4,14 +4,15 @@ The MongoDB schema design balances collaboration features with performance and f
 
 ## User
 
-| Field       | Type     | Notes                          |
-| ----------- | -------- | ------------------------------ |
-| `_id`       | ObjectId | Primary key                    |
-| `username`  | String   | Unique, indexed, trimmed       |
-| `email`     | String   | Unique, indexed, lowercase     |
-| `password`  | String   | Bcrypt hash with min length 12 |
-| `createdAt` | Date     | Auto-managed by Mongoose       |
-| `updatedAt` | Date     | Auto-managed by Mongoose       |
+| Field       | Type     | Notes                               |
+| ----------- | -------- | ----------------------------------- |
+| `_id`       | ObjectId | Primary key                         |
+| `username`  | String   | Unique, indexed, trimmed            |
+| `email`     | String   | Unique, indexed, lowercase          |
+| `password`  | String   | Bcrypt hash with min length 12      |
+| `avatarUrl` | String   | Optional data URL for profile photo |
+| `createdAt` | Date     | Auto-managed by Mongoose            |
+| `updatedAt` | Date     | Auto-managed by Mongoose            |
 
 **Indexes**: `email`, `username`.
 
