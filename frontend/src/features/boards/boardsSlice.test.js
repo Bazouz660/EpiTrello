@@ -33,7 +33,12 @@ describe('boardsSlice', () => {
   it('fetches boards successfully', async () => {
     const { boardsReducer, fetchBoards, selectBoards } = await importBoardsSlice();
     const mockBoards = [
-      { id: 'board-1', title: 'Sprint Planning', description: 'Prepare backlog' },
+      {
+        id: 'board-1',
+        title: 'Sprint Planning',
+        description: 'Prepare backlog',
+        background: { type: 'color', value: '#0f172a' },
+      },
     ];
 
     httpClientMock.get.mockResolvedValue({ data: { boards: mockBoards } });
@@ -68,7 +73,12 @@ describe('boardsSlice', () => {
 
     const store = configureStore({ reducer: { boards: boardsReducer } });
 
-    const newBoard = { id: 'board-2', title: 'Website Redesign', description: 'Marketing site' };
+    const newBoard = {
+      id: 'board-2',
+      title: 'Website Redesign',
+      description: 'Marketing site',
+      background: { type: 'color', value: '#0f172a' },
+    };
 
     httpClientMock.post.mockResolvedValue({ data: { board: newBoard } });
 
@@ -87,12 +97,14 @@ describe('boardsSlice', () => {
       id: 'board-3',
       title: 'Team Retro',
       description: 'Discuss wins and improvements',
+      background: { type: 'color', value: '#0f172a' },
     };
 
     const updatedBoard = {
       ...originalBoard,
       title: 'Team Retrospective',
       description: 'Weekly retro',
+      background: { type: 'color', value: '#312e81' },
     };
 
     const initialBoardsState = createBoardsInitialState();

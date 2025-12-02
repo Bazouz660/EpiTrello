@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import app from '../src/app.js';
+import { Board } from '../src/models/Board.js';
 
 import { setupTestDatabase } from './helpers/setupTestDatabase.js';
 
@@ -13,8 +14,9 @@ const userCredentials = {
   password: 'SuperSecurePass1',
 };
 
-const registerAndLogin = async () => {
-  const response = await request(app).post('/api/auth/register').send(userCredentials);
+const registerAndLogin = async (overrides = {}) => {
+  const payload = { ...userCredentials, ...overrides };
+  const response = await request(app).post('/api/auth/register').send(payload);
   return {
     token: response.body.token,
     user: response.body.user,
@@ -40,6 +42,35 @@ describe('Board API', () => {
     expect(response.body.board).toMatchObject({
       title: 'Project Alpha',
       description: 'Launch plan',
+      membershipRole: 'owner',
+      background: {
+        type: 'color',
+        value: '#0f172a',
+        thumbnail: '',
+      },
+    });
+  });
+
+  it('accepts a background payload during creation', async () => {
+    const { token } = await registerAndLogin();
+
+    const response = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        title: 'Marketing plan',
+        background: {
+          type: 'image',
+          value: 'https://images.test/cover.jpg',
+          thumbnail: 'https://images.test/thumb.jpg',
+        },
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.board.background).toEqual({
+      type: 'image',
+      value: 'https://images.test/cover.jpg',
+      thumbnail: 'https://images.test/thumb.jpg',
     });
   });
 
@@ -55,7 +86,38 @@ describe('Board API', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.boards).toHaveLength(1);
-    expect(response.body.boards[0].title).toBe('Project Beta');
+    expect(response.body.boards[0]).toMatchObject({
+      title: 'Project Beta',
+      membershipRole: 'owner',
+    });
+  });
+
+  it('lists boards where the user is a member', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'teammate',
+      email: 'teammate@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Shared Roadmap' });
+
+    await Board.findByIdAndUpdate(creation.body.board.id, {
+      $push: { members: { user: member.user.id, role: 'member' } },
+    });
+
+    const memberBoards = await request(app)
+      .get('/api/boards')
+      .set('Authorization', `Bearer ${member.token}`);
+
+    expect(memberBoards.status).toBe(200);
+    expect(memberBoards.body.boards).toHaveLength(1);
+    expect(memberBoards.body.boards[0]).toMatchObject({
+      title: 'Shared Roadmap',
+      membershipRole: 'member',
+    });
   });
 
   it('retrieves a specific board by id', async () => {
@@ -85,11 +147,16 @@ describe('Board API', () => {
     const response = await request(app)
       .patch(`/api/boards/${creation.body.board.id}`)
       .set('Authorization', `Bearer ${token}`)
-      .send({ title: 'Project Delta Updated', description: 'Updated description' });
+      .send({
+        title: 'Project Delta Updated',
+        description: 'Updated description',
+        background: { type: 'color', value: '#312e81' },
+      });
 
     expect(response.status).toBe(200);
     expect(response.body.board.title).toBe('Project Delta Updated');
     expect(response.body.board.description).toBe('Updated description');
+    expect(response.body.board.background.value).toBe('#312e81');
   });
 
   it('deletes a board when requested by the owner', async () => {
