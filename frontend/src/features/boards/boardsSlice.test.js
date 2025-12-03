@@ -165,4 +165,145 @@ describe('boardsSlice', () => {
     expect(state.items).toHaveLength(0);
     expect(state.status).toBe('idle');
   });
+
+  it('records an error when board creation fails', async () => {
+    const { boardsReducer, createBoard, selectBoards } = await importBoardsSlice();
+
+    httpClientMock.post.mockRejectedValue({ response: { data: { message: 'Invalid title' } } });
+
+    const store = configureStore({ reducer: { boards: boardsReducer } });
+
+    await store.dispatch(createBoard({ title: '', description: 'Test' }));
+
+    const state = selectBoards(store.getState());
+    expect(state.createStatus).toBe('failed');
+    expect(state.createError).toBe('Invalid title');
+  });
+
+  it('records an error when board update fails', async () => {
+    const { boardsReducer, updateBoard, selectBoards, createBoardsInitialState } =
+      await importBoardsSlice();
+
+    const board = { id: 'board-10', title: 'Original', description: 'Desc' };
+    const initialState = createBoardsInitialState();
+    initialState.items = [board];
+
+    httpClientMock.patch.mockRejectedValue({ response: { data: { message: 'Board not found' } } });
+
+    const store = configureStore({
+      reducer: { boards: boardsReducer },
+      preloadedState: { boards: initialState },
+    });
+
+    await store.dispatch(updateBoard({ id: 'board-10', changes: { title: 'Updated' } }));
+
+    const state = selectBoards(store.getState());
+    expect(state.updateStatus).toBe('failed');
+    expect(state.updateError).toBe('Board not found');
+    expect(state.updatingId).toBeNull();
+  });
+
+  it('records an error when board deletion fails', async () => {
+    const { boardsReducer, deleteBoard, selectBoards, createBoardsInitialState } =
+      await importBoardsSlice();
+
+    const board = { id: 'board-11', title: 'Keep me', description: 'Desc' };
+    const initialState = createBoardsInitialState();
+    initialState.items = [board];
+
+    httpClientMock.delete.mockRejectedValue({ response: { data: { message: 'Forbidden' } } });
+
+    const store = configureStore({
+      reducer: { boards: boardsReducer },
+      preloadedState: { boards: initialState },
+    });
+
+    await store.dispatch(deleteBoard({ id: 'board-11' }));
+
+    const state = selectBoards(store.getState());
+    expect(state.deleteStatus).toBe('failed');
+    expect(state.deleteError).toBe('Forbidden');
+    expect(state.deletingId).toBeNull();
+    expect(state.items).toHaveLength(1);
+  });
+
+  it('fetches a board by ID successfully', async () => {
+    const { boardsReducer, fetchBoardById, selectBoards } = await importBoardsSlice();
+
+    const board = { id: 'board-20', title: 'Fetched Board', description: 'Details' };
+    httpClientMock.get.mockResolvedValue({ data: { board } });
+
+    const store = configureStore({ reducer: { boards: boardsReducer } });
+
+    await store.dispatch(fetchBoardById({ id: 'board-20' }));
+
+    const state = selectBoards(store.getState());
+    expect(state.selectedStatus).toBe('succeeded');
+    expect(state.selectedBoard).toEqual(board);
+    expect(state.selectedError).toBeNull();
+  });
+
+  it('records an error when fetchBoardById fails', async () => {
+    const { boardsReducer, fetchBoardById, selectBoards } = await importBoardsSlice();
+
+    httpClientMock.get.mockRejectedValue({ response: { data: { message: 'Not found' } } });
+
+    const store = configureStore({ reducer: { boards: boardsReducer } });
+
+    await store.dispatch(fetchBoardById({ id: 'board-nonexistent' }));
+
+    const state = selectBoards(store.getState());
+    expect(state.selectedStatus).toBe('failed');
+    expect(state.selectedBoard).toBeNull();
+    expect(state.selectedError).toBe('Not found');
+  });
+
+  it('clears boards state with clearBoardsState action', async () => {
+    const { boardsReducer, clearBoardsState, selectBoards, createBoardsInitialState } =
+      await importBoardsSlice();
+
+    const initialState = createBoardsInitialState();
+    initialState.items = [{ id: 'board-50', title: 'Test' }];
+    initialState.status = 'succeeded';
+    initialState.selectedBoard = { id: 'board-50', title: 'Test' };
+
+    const store = configureStore({
+      reducer: { boards: boardsReducer },
+      preloadedState: { boards: initialState },
+    });
+
+    store.dispatch(clearBoardsState());
+
+    const state = selectBoards(store.getState());
+    expect(state.items).toEqual([]);
+    expect(state.status).toBe('idle');
+    expect(state.selectedBoard).toBeNull();
+  });
+
+  it('creates a board with background', async () => {
+    const { boardsReducer, createBoard, selectBoards } = await importBoardsSlice();
+
+    const newBoard = {
+      id: 'board-bg',
+      title: 'With Background',
+      description: 'Has bg',
+      background: { type: 'color', value: '#ff0000' },
+    };
+
+    httpClientMock.post.mockResolvedValue({ data: { board: newBoard } });
+
+    const store = configureStore({ reducer: { boards: boardsReducer } });
+
+    await store.dispatch(
+      createBoard({
+        title: newBoard.title,
+        description: newBoard.description,
+        background: { type: 'color', value: '#ff0000' },
+      }),
+    );
+
+    const state = selectBoards(store.getState());
+    expect(state.createStatus).toBe('succeeded');
+    expect(state.items[0].background).toEqual({ type: 'color', value: '#ff0000' });
+  });
 });

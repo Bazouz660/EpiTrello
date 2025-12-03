@@ -19,8 +19,8 @@ describe('middleware/errorHandlers', () => {
     expect(json).toHaveBeenCalledWith(
       expect.objectContaining({
         status: 500,
-        message: expect.any(String)
-      })
+        message: expect.any(String),
+      }),
     );
   });
 });

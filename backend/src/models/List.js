@@ -8,25 +8,24 @@ const listSchema = new Schema(
       type: String,
       required: true,
       trim: true,
-      maxlength: 120
+      maxlength: 120,
     },
     board: {
       type: Schema.Types.ObjectId,
       ref: 'Board',
       required: true,
-      index: true
+      index: true,
     },
     position: {
       type: Number,
       required: true,
-      min: 0
     },
     archived: {
       type: Boolean,
-      default: false
-    }
+      default: false,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 listSchema.index({ board: 1, position: 1 }, { unique: true });

@@ -12,8 +12,8 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: {
     origin: env.CLIENT_URL,
-    credentials: true
-  }
+    credentials: true,
+  },
 });
 
 io.on('connection', (socket) => {

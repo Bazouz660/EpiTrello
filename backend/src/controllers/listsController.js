@@ -122,3 +122,42 @@ export const deleteList = async (req, res, next) => {
     next(error);
   }
 };
+
+export const reorderLists = async (req, res, next) => {
+  try {
+    const { boardId, listIds } = req.body;
+    if (!boardId || !Array.isArray(listIds)) {
+      return res.status(400).json({ message: 'boardId and listIds array are required' });
+    }
+
+    const board = await Board.findById(boardId);
+    if (!ensureBoardAccess(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Two-phase update to avoid unique constraint violations:
+    // Phase 1: Set all positions to temporary negative values
+    const tempBulkOps = listIds.map((listId, index) => ({
+      updateOne: {
+        filter: { _id: listId, board: boardId },
+        update: { $set: { position: -(index + 1) } },
+      },
+    }));
+    await List.bulkWrite(tempBulkOps, { ordered: false });
+
+    // Phase 2: Set final positions
+    const finalBulkOps = listIds.map((listId, index) => ({
+      updateOne: {
+        filter: { _id: listId, board: boardId },
+        update: { $set: { position: index } },
+      },
+    }));
+    await List.bulkWrite(finalBulkOps, { ordered: false });
+
+    // Fetch updated lists
+    const lists = await List.find({ board: boardId }).sort({ position: 1 });
+    return res.status(200).json({ lists: lists.map(toResponse) });
+  } catch (error) {
+    next(error);
+  }
+};

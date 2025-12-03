@@ -15,13 +15,15 @@ const envSchema = z.object({
     .string()
     .min(16, 'JWT_SECRET must be at least 16 characters long')
     .default('change-me-please-change-me'),
-  CLIENT_URL: z.string().url().default('http://localhost:5173')
+  CLIENT_URL: z.string().url().default('http://localhost:5173'),
 });
 
 const parsed = envSchema.safeParse(process.env);
 
 if (!parsed.success) {
-  const message = parsed.error.errors.map((issue) => `${issue.path.join('.')}: ${issue.message}`).join(', ');
+  const message = parsed.error.errors
+    .map((issue) => `${issue.path.join('.')}: ${issue.message}`)
+    .join(', ');
   throw new Error(`Environment validation failed: ${message}`);
 }
 

@@ -25,6 +25,8 @@ const buildInitialState = () => ({
   deleteStatus: 'idle',
   deleteError: null,
   deletingId: null,
+  reorderStatus: 'idle',
+  reorderError: null,
 });
 
 const initialState = buildInitialState();
@@ -85,11 +87,33 @@ export const deleteList = createAsyncThunk('lists/delete', async ({ id }, { reje
   }
 });
 
+export const reorderLists = createAsyncThunk(
+  'lists/reorder',
+  async ({ boardId, listIds }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.post('/lists/reorder', { boardId, listIds });
+      return { boardId, lists: data.lists ?? [] };
+    } catch (error) {
+      return rejectWithValue({ boardId, listIds, message: extractErrorMessage(error) });
+    }
+  },
+);
+
 const listsSlice = createSlice({
   name: 'lists',
   initialState,
   reducers: {
     clearListsState: () => buildInitialState(),
+    optimisticReorderLists: (state, action) => {
+      const { boardId, listIds } = action.payload;
+      state.idsByBoard[boardId] = listIds;
+      // Update position in entities for sorting consistency
+      listIds.forEach((id, index) => {
+        if (state.entities[id]) {
+          state.entities[id].position = index;
+        }
+      });
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -179,12 +203,30 @@ const listsSlice = createSlice({
         state.deletingId = null;
         state.deleteError = action.payload ?? action.error?.message ?? 'Failed to delete list';
       })
+      .addCase(reorderLists.pending, (state) => {
+        state.reorderStatus = 'loading';
+        state.reorderError = null;
+      })
+      .addCase(reorderLists.fulfilled, (state, action) => {
+        state.reorderStatus = 'succeeded';
+        state.reorderError = null;
+        const { boardId, lists } = action.payload;
+        state.idsByBoard[boardId] = lists.map((list) => list.id);
+        lists.forEach((list) => {
+          state.entities[list.id] = list;
+        });
+      })
+      .addCase(reorderLists.rejected, (state, action) => {
+        state.reorderStatus = 'failed';
+        state.reorderError = action.payload?.message ?? 'Failed to reorder lists';
+        // Revert optimistic update - refetch will be triggered
+      })
       .addCase(clearSession, () => buildInitialState());
   },
 });
 
 export const listsReducer = listsSlice.reducer;
-export const { clearListsState } = listsSlice.actions;
+export const { clearListsState, optimisticReorderLists } = listsSlice.actions;
 export const selectLists = (state) => state.lists;
 export const createListsInitialState = () => buildInitialState();
 
