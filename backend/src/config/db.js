@@ -14,7 +14,7 @@ export const connectToDatabase = async () => {
   try {
     await mongoose.connect(env.MONGODB_URI, {
       autoIndex: true,
-      maxPoolSize: 10
+      maxPoolSize: 10,
     });
     logger.info('Connected to MongoDB');
     return mongoose.connection;

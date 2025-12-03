@@ -37,8 +37,8 @@ const AppLayout = () => {
   };
 
   return (
-    <div className="bg-surface min-h-screen text-slate-900">
-      <header className="border-b bg-white">
+    <div className="bg-surface flex h-screen flex-col overflow-hidden text-slate-900">
+      <header className="flex-shrink-0 border-b bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-6 py-4">
           <NavLink to="/" className="text-primary text-lg font-semibold">
             EpiTrello
@@ -99,7 +99,7 @@ const AppLayout = () => {
           </nav>
         </div>
       </header>
-      <main className="px-6 py-8">
+      <main className="flex-1 overflow-auto px-6 py-8">
         <Outlet />
       </main>
     </div>

@@ -169,4 +169,149 @@ describe('authSlice', () => {
     expect(mockClearStoredAuth).toHaveBeenCalledTimes(1);
     expect(mockSetAuthToken).toHaveBeenCalledWith(null);
   });
+
+  it('registers a new user and stores credentials on success', async () => {
+    const storedAuth = { token: null, user: null };
+    const { authReducer, registerUser, selectAuth } = await importAuthSlice(storedAuth);
+
+    const responsePayload = {
+      token: 'new-token-456',
+      user: { id: 'user-new', username: 'newuser', email: 'new@example.com' },
+    };
+
+    httpClientMock.post.mockResolvedValue({ data: responsePayload });
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    await store.dispatch(
+      registerUser({
+        username: 'newuser',
+        email: 'new@example.com',
+        password: 'secure-password',
+      }),
+    );
+
+    const state = selectAuth(store.getState());
+
+    expect(state.token).toBe('new-token-456');
+    expect(state.user).toEqual(responsePayload.user);
+    expect(state.status).toBe('succeeded');
+    expect(state.initialized).toBe(true);
+    expect(mockPersistAuth).toHaveBeenCalledWith('new-token-456', responsePayload.user);
+    expect(mockSetAuthToken).toHaveBeenCalledWith('new-token-456');
+  });
+
+  it('captures registration errors and exposes them on state', async () => {
+    const storedAuth = { token: null, user: null };
+    const { authReducer, registerUser, selectAuth } = await importAuthSlice(storedAuth);
+
+    httpClientMock.post.mockRejectedValue({
+      response: { data: { message: 'Email already in use' } },
+    });
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+    await store.dispatch(
+      registerUser({ username: 'test', email: 'taken@example.com', password: 'pass123' }),
+    );
+
+    const state = selectAuth(store.getState());
+
+    expect(state.status).toBe('failed');
+    expect(state.error).toBe('Email already in use');
+    expect(state.user).toBeNull();
+    expect(state.token).toBeNull();
+  });
+
+  it('fetches current user successfully', async () => {
+    const storedAuth = { token: 'active-token', user: { id: 'user-old', username: 'old' } };
+    const { authReducer, fetchCurrentUser, selectAuth } = await importAuthSlice(storedAuth);
+
+    const currentUser = {
+      id: 'user-refreshed',
+      username: 'refreshed',
+      email: 'refreshed@example.com',
+    };
+    httpClientMock.get.mockResolvedValue({ data: { user: currentUser } });
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    await store.dispatch(fetchCurrentUser());
+
+    const state = selectAuth(store.getState());
+
+    expect(state.status).toBe('succeeded');
+    expect(state.user).toEqual(currentUser);
+    expect(state.initialized).toBe(true);
+    expect(mockPersistAuth).toHaveBeenCalledWith('active-token', currentUser);
+  });
+
+  it('clears credentials when fetchCurrentUser returns 401', async () => {
+    const storedAuth = { token: 'expired-token', user: { id: 'user-x', username: 'x' } };
+    const { authReducer, fetchCurrentUser, selectAuth } = await importAuthSlice(storedAuth);
+
+    httpClientMock.get.mockRejectedValue({
+      response: { status: 401, data: { message: 'Token expired' } },
+    });
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    await store.dispatch(fetchCurrentUser());
+
+    const state = selectAuth(store.getState());
+
+    expect(state.status).toBe('failed');
+    expect(state.user).toBeNull();
+    expect(state.token).toBeNull();
+    expect(state.error).toBe('Token expired');
+    expect(mockClearStoredAuth).toHaveBeenCalled();
+    expect(mockSetAuthToken).toHaveBeenCalledWith(null);
+  });
+
+  it('clears auth error with clearAuthError action', async () => {
+    const storedAuth = { token: null, user: null };
+    const { authReducer, clearAuthError, selectAuth } = await importAuthSlice(storedAuth);
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    // Simulate a failed state
+    store.dispatch({ type: 'auth/login/rejected', payload: 'Invalid credentials' });
+
+    let state = selectAuth(store.getState());
+    expect(state.status).toBe('failed');
+    expect(state.error).toBe('Invalid credentials');
+
+    store.dispatch(clearAuthError());
+
+    state = selectAuth(store.getState());
+    expect(state.error).toBeNull();
+    expect(state.status).toBe('idle');
+  });
+
+  it('sets user directly with setUser action', async () => {
+    const storedAuth = { token: 'token-abc', user: null };
+    const { authReducer, setUser, selectAuth } = await importAuthSlice(storedAuth);
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    const newUser = { id: 'user-direct', username: 'direct', email: 'direct@example.com' };
+    store.dispatch(setUser(newUser));
+
+    const state = selectAuth(store.getState());
+    expect(state.user).toEqual(newUser);
+  });
+
+  it('initializes with no token and returns null user', async () => {
+    const storedAuth = { token: null, user: null };
+    const { authReducer, initializeAuth, selectAuth } = await importAuthSlice(storedAuth);
+
+    const store = configureStore({ reducer: { auth: authReducer } });
+
+    await store.dispatch(initializeAuth());
+
+    const state = selectAuth(store.getState());
+
+    expect(state.initialized).toBe(true);
+    expect(state.user).toBeNull();
+    expect(state.token).toBeNull();
+  });
 });

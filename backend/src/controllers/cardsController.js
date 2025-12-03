@@ -243,3 +243,133 @@ export const deleteCard = async (req, res, next) => {
     next(error);
   }
 };
+
+export const moveCard = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { targetListId, position, sourceListCardIds, targetListCardIds } = req.body;
+
+    const card = await Card.findById(id);
+    if (!card) return res.status(404).json({ message: 'Card not found' });
+
+    const sourceList = await List.findById(card.list);
+    if (!sourceList) return res.status(404).json({ message: 'Source list not found' });
+
+    const sourceBoard = await Board.findById(sourceList.board);
+    if (!ensureBoardAccess(sourceBoard, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const targetList = await List.findById(targetListId);
+    if (!targetList) return res.status(404).json({ message: 'Target list not found' });
+
+    const targetBoard = await Board.findById(targetList.board);
+    if (!ensureBoardAccess(targetBoard, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden to move to target list' });
+    }
+
+    const originalListId = card.list.toString();
+    const sameList = originalListId === targetListId;
+
+    // Step 1: Move ALL affected cards to negative positions to avoid unique constraint conflicts
+    const moveToNegativeBulkOps = [];
+
+    // Move the dragged card to negative position and update its list
+    moveToNegativeBulkOps.push({
+      updateOne: {
+        filter: { _id: id },
+        update: { $set: { list: targetListId, position: -1 } },
+      },
+    });
+
+    // Move source list cards to negative positions (for cross-list moves)
+    if (!sameList && sourceListCardIds && Array.isArray(sourceListCardIds)) {
+      sourceListCardIds.forEach((cardId, index) => {
+        if (cardId !== id) {
+          moveToNegativeBulkOps.push({
+            updateOne: {
+              filter: { _id: cardId },
+              update: { $set: { position: -(index + 2) } }, // -2, -3, -4, etc.
+            },
+          });
+        }
+      });
+    }
+
+    // Move target list cards to negative positions
+    if (targetListCardIds && Array.isArray(targetListCardIds)) {
+      targetListCardIds.forEach((cardId, index) => {
+        if (cardId !== id) {
+          moveToNegativeBulkOps.push({
+            updateOne: {
+              filter: { _id: cardId },
+              update: { $set: { position: -(index + 100) } }, // -100, -101, etc. to avoid overlap
+            },
+          });
+        }
+      });
+    }
+
+    await Card.bulkWrite(moveToNegativeBulkOps, { ordered: false });
+
+    // Step 2: Set all cards to their final positions
+    const setFinalPositionBulkOps = [];
+
+    // Set source list cards to final positions
+    if (!sameList && sourceListCardIds && Array.isArray(sourceListCardIds)) {
+      sourceListCardIds.forEach((cardId, index) => {
+        if (cardId !== id) {
+          setFinalPositionBulkOps.push({
+            updateOne: {
+              filter: { _id: cardId },
+              update: { $set: { position: index } },
+            },
+          });
+        }
+      });
+    }
+
+    // Set target list cards to final positions
+    if (targetListCardIds && Array.isArray(targetListCardIds)) {
+      targetListCardIds.forEach((cardId, index) => {
+        if (cardId !== id) {
+          setFinalPositionBulkOps.push({
+            updateOne: {
+              filter: { _id: cardId },
+              update: { $set: { position: index } },
+            },
+          });
+        }
+      });
+    }
+
+    // Set the moved card's final position
+    setFinalPositionBulkOps.push({
+      updateOne: {
+        filter: { _id: id },
+        update: { $set: { position } },
+      },
+    });
+
+    await Card.bulkWrite(setFinalPositionBulkOps, { ordered: false });
+
+    // Step 3: Add activity entry
+    const activityEntry = !sameList
+      ? buildActivityEntry(
+          `Moved from "${sourceList.title}" to "${targetList.title}"`,
+          req.user._id,
+        )
+      : buildActivityEntry('Card reordered', req.user._id);
+
+    const updatedCard = await Card.findByIdAndUpdate(
+      id,
+      { $push: { activity: activityEntry } },
+      { new: true },
+    );
+
+    return res.status(200).json({ card: toResponse(updatedCard) });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ message: 'Position conflict' });
+    next(error);
+  }
+};
