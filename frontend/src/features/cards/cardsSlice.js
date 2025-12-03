@@ -25,6 +25,8 @@ const buildInitialState = () => ({
   deleteStatus: 'idle',
   deleteError: null,
   deletingId: null,
+  moveStatus: 'idle',
+  moveError: null,
 });
 
 const initialState = buildInitialState();
@@ -82,11 +84,58 @@ export const deleteCard = createAsyncThunk('cards/delete', async ({ id }, { reje
   }
 });
 
+export const moveCard = createAsyncThunk(
+  'cards/move',
+  async (
+    { cardId, targetListId, position, sourceListCardIds, targetListCardIds },
+    { rejectWithValue },
+  ) => {
+    try {
+      const { data } = await httpClient.post(`/cards/${cardId}/move`, {
+        targetListId,
+        position,
+        sourceListCardIds,
+        targetListCardIds,
+      });
+      return data.card;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
 const cardsSlice = createSlice({
   name: 'cards',
   initialState,
   reducers: {
     clearCardsState: () => buildInitialState(),
+    optimisticMoveCard: (state, action) => {
+      const { cardId, sourceListId, targetListId, sourceListCardIds, targetListCardIds } =
+        action.payload;
+      // Update source list
+      if (sourceListCardIds) {
+        state.idsByList[sourceListId] = sourceListCardIds;
+        sourceListCardIds.forEach((id, index) => {
+          if (state.entities[id]) {
+            state.entities[id].position = index;
+          }
+        });
+      }
+      // Update target list (only if different from source)
+      if (targetListId !== sourceListId && targetListCardIds) {
+        state.idsByList[targetListId] = targetListCardIds;
+        targetListCardIds.forEach((id, index) => {
+          if (state.entities[id]) {
+            state.entities[id].position = index;
+            state.entities[id].list = targetListId;
+          }
+        });
+      }
+      // Update the moved card's list reference
+      if (state.entities[cardId]) {
+        state.entities[cardId].list = targetListId;
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -180,12 +229,27 @@ const cardsSlice = createSlice({
         state.deletingId = null;
         state.deleteError = action.payload ?? action.error?.message ?? 'Failed to delete card';
       })
+      .addCase(moveCard.pending, (state) => {
+        state.moveStatus = 'loading';
+        state.moveError = null;
+      })
+      .addCase(moveCard.fulfilled, (state, action) => {
+        state.moveStatus = 'succeeded';
+        state.moveError = null;
+        const card = action.payload;
+        state.entities[card.id] = card;
+      })
+      .addCase(moveCard.rejected, (state, action) => {
+        state.moveStatus = 'failed';
+        state.moveError = action.payload ?? 'Failed to move card';
+        // Revert will be handled by refetching
+      })
       .addCase(clearSession, () => buildInitialState());
   },
 });
 
 export const cardsReducer = cardsSlice.reducer;
-export const { clearCardsState } = cardsSlice.actions;
+export const { clearCardsState, optimisticMoveCard } = cardsSlice.actions;
 export const selectCards = (state) => state.cards;
 export const createCardsInitialState = () => buildInitialState();
 

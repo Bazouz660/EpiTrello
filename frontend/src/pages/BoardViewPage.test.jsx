@@ -45,6 +45,8 @@ vi.mock('../features/lists/listsSlice.js', () => ({
   fetchListsByBoard: mockFetchListsByBoard,
   selectLists: (state) => state.lists,
   updateList: mockUpdateList,
+  optimisticReorderLists: vi.fn((payload) => ({ type: 'lists/optimisticReorder', payload })),
+  reorderLists: vi.fn((payload) => ({ type: 'lists/reorder', payload })),
 }));
 
 vi.mock('../features/cards/cardsSlice.js', () => ({
@@ -53,6 +55,8 @@ vi.mock('../features/cards/cardsSlice.js', () => ({
   fetchCardsByList: mockFetchCardsByList,
   selectCards: (state) => state.cards,
   updateCard: mockUpdateCard,
+  optimisticMoveCard: vi.fn((payload) => ({ type: 'cards/optimisticMove', payload })),
+  moveCard: vi.fn((payload) => ({ type: 'cards/move', payload })),
 }));
 
 import BoardViewPage from './BoardViewPage.jsx';
@@ -96,6 +100,8 @@ const buildState = () => ({
     deleteStatus: 'idle',
     deleteError: null,
     deletingId: null,
+    reorderStatus: 'idle',
+    reorderError: null,
   },
   cards: {
     entities: {
@@ -142,6 +148,8 @@ const buildState = () => ({
     deleteStatus: 'idle',
     deleteError: null,
     deletingId: null,
+    moveStatus: 'idle',
+    moveError: null,
   },
 });
 
@@ -163,7 +171,7 @@ describe('BoardViewPage', () => {
     renderWithRouter();
 
     expect(screen.getByRole('heading', { name: 'Project Eagle' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /to do/i })).toBeInTheDocument();
+    expect(screen.getByText('To do')).toBeInTheDocument();
     expect(screen.getByText('Set up CI')).toBeInTheDocument();
     expect(screen.queryByText('Add lint step')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Card has description')).toBeInTheDocument();
@@ -205,14 +213,14 @@ describe('BoardViewPage', () => {
     renderWithRouter();
 
     await user.click(screen.getByLabelText('Open details for Set up CI'));
-    expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByText('Add lint step')).toBeInTheDocument();
     expect(screen.getByText('Dev')).toBeInTheDocument();
     expect(screen.getAllByText('Member · mem-1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Great work')).toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Close'));
-    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
   });
 
   it('saves card updates through the single edit/save flow', async () => {
@@ -221,7 +229,7 @@ describe('BoardViewPage', () => {
 
     mockDispatch.mockClear();
     await user.click(screen.getByLabelText('Open details for Set up CI'));
-    await user.click(screen.getByRole('button', { name: 'Edit details' }));
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
 
     const titleField = screen.getByLabelText('Card title');
     await user.clear(titleField);
@@ -239,7 +247,7 @@ describe('BoardViewPage', () => {
     const secondLabelInput = screen.getByLabelText('Label 2 text');
     await user.type(secondLabelInput, 'Docs');
 
-    await user.click(screen.getByLabelText('Assign Board owner'));
+    await user.click(screen.getByLabelText('Board owner'));
 
     await user.click(screen.getByRole('button', { name: 'Add item' }));
     const checklistInput = screen.getByLabelText('Checklist item 3');
@@ -285,15 +293,29 @@ describe('BoardViewPage', () => {
   });
 
   it('allows inline editing of list titles', async () => {
-    const user = userEvent.setup();
+    const { fireEvent } = await import('@testing-library/react');
     renderWithRouter();
+    mockDispatch.mockClear();
 
-    await user.click(screen.getByRole('button', { name: /to do/i }));
-    const input = screen.getByLabelText('Edit list title');
-    await user.clear(input);
-    await user.type(input, 'Production ready');
-    await user.keyboard('{Enter}');
+    // Find the span with the list title and click on its parent button
+    const listTitleSpan = screen.getByText('To do');
+    const editButton = listTitleSpan.closest('button');
+    expect(editButton).toBeInTheDocument();
 
+    // Use fireEvent instead of user.click as dnd-kit may interfere with pointer events
+    fireEvent.click(editButton);
+
+    // After clicking, the input field should appear
+    const input = await screen.findByLabelText('Edit list title');
+    // Clear and type new value
+    fireEvent.change(input, { target: { value: 'Production ready' } });
+
+    // Submit the form
+    const form = input.closest('form');
+    fireEvent.submit(form);
+
+    // Check that dispatch was called with updateList
+    expect(mockDispatch).toHaveBeenCalled();
     expect(mockUpdateList).toHaveBeenCalledWith({
       id: 'list-1',
       changes: { title: 'Production ready' },

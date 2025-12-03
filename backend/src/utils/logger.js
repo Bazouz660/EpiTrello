@@ -1,4 +1,5 @@
-const formatMessage = (level, message) => `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}`;
+const formatMessage = (level, message) =>
+  `[${new Date().toISOString()}] [${level.toUpperCase()}] ${message}`;
 
 export const logger = {
   info: (message, ...meta) => {
@@ -14,5 +15,5 @@ export const logger = {
     if (process.env.NODE_ENV !== 'production') {
       console.debug(formatMessage('debug', message), ...meta);
     }
-  }
+  },
 };

@@ -1,13 +1,35 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  closestCenter,
+  closestCorners,
+  DndContext,
+  DragOverlay,
+  getFirstCollision,
+  KeyboardSensor,
+  pointerWithin,
+  PointerSensor,
+  rectIntersection,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  horizontalListSortingStrategy,
+  SortableContext,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
+import { DroppableListArea, SortableCard, SortableList } from '../components/dnd/index.js';
 import { fetchBoardById, selectBoards } from '../features/boards/boardsSlice.js';
 import {
   createCard,
   deleteCard,
   fetchCardsByList,
+  moveCard,
+  optimisticMoveCard,
   selectCards,
   updateCard,
 } from '../features/cards/cardsSlice.js';
@@ -15,6 +37,8 @@ import {
   createList,
   deleteList,
   fetchListsByBoard,
+  optimisticReorderLists,
+  reorderLists,
   selectLists,
   updateList,
 } from '../features/lists/listsSlice.js';
@@ -58,7 +82,65 @@ const BoardViewPage = () => {
   const [cardModal, setCardModal] = useState(emptyCardModalState);
   const [cardModalError, setCardModalError] = useState(null);
   const [activeCardId, setActiveCardId] = useState(null);
+  const [activeDragItem, setActiveDragItem] = useState(null);
   const listTitleInputRef = useRef(null);
+
+  // Custom collision detection that handles lists and cards appropriately
+  const collisionDetectionStrategy = useCallback(
+    (args) => {
+      // When dragging a list, only consider other lists as drop targets
+      if (activeDragItem?.type === 'list') {
+        const collisions = closestCenter({
+          ...args,
+          droppableContainers: args.droppableContainers.filter(
+            (container) => container.data.current?.type === 'list',
+          ),
+        });
+        return collisions;
+      }
+
+      // For cards, use a combination strategy
+      // First check if pointer is within any container
+      const pointerCollisions = pointerWithin(args);
+      const collisions = pointerCollisions.length > 0 ? pointerCollisions : rectIntersection(args);
+
+      // Get the first collision
+      let overId = getFirstCollision(collisions, 'id');
+      if (!overId) return [];
+
+      // If over a list container, check for cards inside
+      const overContainer = args.droppableContainers.find((c) => c.id === overId);
+      if (overContainer?.data.current?.type === 'list-container') {
+        // Find cards within this list and use closest corners for precise placement
+        const listId = overContainer.data.current?.listId;
+        const cardsInList = args.droppableContainers.filter(
+          (c) => c.data.current?.type === 'card' && c.data.current?.listId === listId,
+        );
+        if (cardsInList.length > 0) {
+          const cardCollisions = closestCorners({
+            ...args,
+            droppableContainers: cardsInList,
+          });
+          if (cardCollisions.length > 0) {
+            return cardCollisions;
+          }
+        }
+      }
+
+      return collisions;
+    },
+    [activeDragItem],
+  );
+
+  // Drag & drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor),
+  );
 
   const closeCreateListModal = () => {
     setIsListModalOpen(false);
@@ -120,6 +202,211 @@ const BoardViewPage = () => {
     });
     return result;
   }, [cardsState.entities, cardsState.idsByList, lists]);
+
+  const listIds = useMemo(() => lists.map((list) => list.id), [lists]);
+
+  // Drag & drop handlers
+  const handleDragStart = (event) => {
+    const { active } = event;
+    const { type } = active.data.current || {};
+    if (type === 'list') {
+      const list = listsState.entities[active.id];
+      setActiveDragItem({ type: 'list', data: list });
+    } else if (type === 'card') {
+      const card = cardsState.entities[active.id];
+      setActiveDragItem({ type: 'card', data: card, originalListId: card.list });
+    }
+  };
+
+  const handleDragOver = (event) => {
+    const { active, over } = event;
+    if (!over) return;
+
+    const activeType = active.data.current?.type;
+    if (activeType !== 'card') return;
+
+    const activeId = active.id;
+    const overId = over.id;
+    const overType = over.data.current?.type;
+
+    // Get the original source list from activeDragItem (stable reference)
+    const originalSourceListId = activeDragItem?.originalListId;
+    if (!originalSourceListId) return;
+
+    // Determine the target list
+    let overListId;
+    if (overType === 'card') {
+      overListId = over.data.current?.listId;
+    } else if (overType === 'list-container') {
+      overListId = over.data.current?.listId;
+    } else if (overType === 'list') {
+      overListId = over.id;
+    }
+
+    if (!overListId) return;
+
+    // Find which list currently contains the card
+    let currentListId = null;
+    for (const listId of Object.keys(cardsState.idsByList)) {
+      if (cardsState.idsByList[listId]?.includes(activeId)) {
+        currentListId = listId;
+        break;
+      }
+    }
+
+    if (!currentListId) return;
+
+    // Get current card arrays
+    const currentListCards = cardsState.idsByList[currentListId] ?? [];
+    const targetCards = cardsState.idsByList[overListId] ?? [];
+
+    // Same list reordering is handled by dnd-kit visually and persisted in handleDragEnd
+    if (currentListId === overListId) {
+      return;
+    }
+
+    // Cross-list move: Move card from current list to target list
+    const newSourceCards = currentListCards.filter((id) => id !== activeId);
+
+    // Calculate position in target list
+    let insertIndex = targetCards.length;
+    if (overType === 'card') {
+      const overIndex = targetCards.indexOf(overId);
+      if (overIndex !== -1) {
+        insertIndex = overIndex;
+      }
+    }
+
+    const newTargetCards = [
+      ...targetCards.slice(0, insertIndex),
+      activeId,
+      ...targetCards.slice(insertIndex),
+    ];
+
+    dispatch(
+      optimisticMoveCard({
+        cardId: activeId,
+        sourceListId: currentListId,
+        targetListId: overListId,
+        sourceListCardIds: newSourceCards,
+        targetListCardIds: newTargetCards,
+      }),
+    );
+  };
+
+  const handleDragEnd = (event) => {
+    const { active, over } = event;
+    // Capture original list ID from activeDragItem before clearing it
+    const originalSourceListId =
+      activeDragItem?.type === 'card' ? activeDragItem.originalListId : null;
+    setActiveDragItem(null);
+
+    if (!over) return;
+
+    const activeType = active.data.current?.type;
+
+    if (activeType === 'list') {
+      // Reordering lists
+      const oldIndex = listIds.indexOf(active.id);
+      const newIndex = listIds.indexOf(over.id);
+
+      if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+        const newListIds = arrayMove(listIds, oldIndex, newIndex);
+
+        // Optimistic update
+        dispatch(optimisticReorderLists({ boardId, listIds: newListIds }));
+
+        // Persist to server
+        dispatch(reorderLists({ boardId, listIds: newListIds }));
+      }
+    } else if (activeType === 'card') {
+      const activeId = active.id;
+      const overId = over.id;
+      const overType = over.data.current?.type;
+
+      // Determine the target list
+      let targetListId;
+      if (overType === 'card') {
+        targetListId = over.data.current?.listId;
+      } else if (overType === 'list-container') {
+        targetListId = over.data.current?.listId;
+      } else if (overType === 'list') {
+        targetListId = over.id;
+      }
+
+      if (!targetListId) return;
+
+      // Find which list currently contains the card (may have changed during drag)
+      let currentListId = null;
+      for (const listId of Object.keys(cardsState.idsByList)) {
+        if (cardsState.idsByList[listId]?.includes(activeId)) {
+          currentListId = listId;
+          break;
+        }
+      }
+
+      if (!currentListId) return;
+
+      const wasCrossListMove = originalSourceListId && originalSourceListId !== currentListId;
+
+      // Get current state
+      const sourceCards = cardsState.idsByList[originalSourceListId] ?? [];
+      const currentListCards = cardsState.idsByList[currentListId] ?? [];
+
+      if (wasCrossListMove) {
+        // Cross-list move - optimistic update already happened in handleDragOver
+        // Just persist current state to server
+        const position = currentListCards.indexOf(activeId);
+
+        if (position === -1) return; // Card wasn't moved, shouldn't happen
+
+        dispatch(
+          moveCard({
+            cardId: activeId,
+            targetListId: currentListId,
+            position,
+            sourceListCardIds: sourceCards,
+            targetListCardIds: currentListCards,
+          }),
+        );
+      } else {
+        // Same list reordering - need to calculate new position and do optimistic update
+        const oldIndex = currentListCards.indexOf(activeId);
+        let newIndex = currentListCards.indexOf(overId);
+
+        if (overType === 'list-container' || overType === 'list') {
+          newIndex = currentListCards.length - 1;
+        }
+
+        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
+          const newCardIds = arrayMove(currentListCards, oldIndex, newIndex);
+
+          // Optimistic update
+          dispatch(
+            optimisticMoveCard({
+              cardId: activeId,
+              sourceListId: currentListId,
+              targetListId: currentListId,
+              sourceListCardIds: newCardIds,
+              targetListCardIds: newCardIds,
+            }),
+          );
+
+          // Persist to server
+          const position = newCardIds.indexOf(activeId);
+          dispatch(
+            moveCard({
+              cardId: activeId,
+              targetListId: currentListId,
+              position,
+              sourceListCardIds: newCardIds,
+              targetListCardIds: newCardIds,
+            }),
+          );
+        }
+      }
+    }
+  };
 
   useEffect(() => {
     dispatch(fetchBoardById({ id: boardId }));
@@ -357,12 +644,12 @@ const BoardViewPage = () => {
 
   return (
     <section
-      className="relative -mx-6 -my-8 min-h-[calc(100vh-120px)]"
+      className="relative -mx-6 -my-8 h-[calc(100vh-73px)] overflow-hidden"
       style={boardBackgroundStyle}
     >
-      <div className="absolute inset-0 bg-slate-900/60" aria-hidden="true" />
-      <div className="relative z-10 flex min-h-[calc(100vh-120px)] flex-col gap-6 p-6">
-        <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center justify-between gap-3 text-white">
+      <div className="absolute inset-0 bg-slate-900/60" />
+      <div className="relative z-10 flex h-full flex-col p-6 pb-0">
+        <div className="mx-auto mb-6 flex w-full max-w-6xl flex-shrink-0 flex-wrap items-center justify-between gap-3 text-white">
           <div>
             <p className="text-xs uppercase tracking-wide text-slate-200">
               {isOwner ? 'Owned board' : `Shared · ${membershipRole}`}
@@ -388,107 +675,191 @@ const BoardViewPage = () => {
         </div>
 
         {listsError && (
-          <div className="mx-auto w-full max-w-6xl rounded-lg border border-red-200 bg-red-50/90 p-4 text-sm text-red-700">
+          <div className="mx-auto mb-6 w-full max-w-6xl flex-shrink-0 rounded-lg border border-red-200 bg-red-50/90 p-4 text-sm text-red-700">
             {listsError}
           </div>
         )}
 
-        <div className="flex-1 overflow-x-auto pb-4">
-          <div className="flex h-full min-h-[calc(100vh-220px)] items-start gap-4">
-            {listsStatus === 'loading' && lists.length === 0 && (
-              <div className="flex min-h-[200px] min-w-[280px] items-center justify-center rounded-lg border border-white/30 bg-white/10 p-6 text-sm text-white/80">
-                Loading lists…
-              </div>
-            )}
-            {lists.length === 0 && listsStatus === 'succeeded' && (
-              <div className="flex min-h-[200px] min-w-[280px] items-center justify-center rounded-lg border border-dashed border-white/40 bg-white/5 p-6 text-sm text-white/80">
-                This board does not have any lists yet.
-              </div>
-            )}
-            {lists.map((list) => {
-              const isEditing = listEditor.id === list.id;
-              const cards = cardsByList[list.id] ?? [];
-              const cardsStatus = cardsState.fetchStatusByList[list.id] ?? 'idle';
-              const cardsError = cardsState.fetchErrorByList[list.id] ?? null;
-              const isDeletingList =
-                listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
+        <div className="custom-scrollbar -mx-6 min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-6 pb-3">
+          <DndContext
+            sensors={sensors}
+            collisionDetection={collisionDetectionStrategy}
+            onDragStart={handleDragStart}
+            onDragOver={handleDragOver}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex h-full items-stretch gap-4 pr-6">
+              {listsStatus === 'loading' && lists.length === 0 && (
+                <div className="flex min-h-[200px] min-w-[280px] items-center justify-center rounded-lg border border-white/30 bg-white/10 p-6 text-sm text-white/80">
+                  Loading lists…
+                </div>
+              )}
+              {lists.length === 0 && listsStatus === 'succeeded' && (
+                <div className="flex min-h-[200px] min-w-[280px] items-center justify-center rounded-lg border border-dashed border-white/40 bg-white/5 p-6 text-sm text-white/80">
+                  This board does not have any lists yet.
+                </div>
+              )}
+              <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
+                {lists.map((list) => {
+                  const isEditing = listEditor.id === list.id;
+                  const cards = cardsByList[list.id] ?? [];
+                  const cardIds = cards.map((c) => c.id);
+                  const cardsStatus = cardsState.fetchStatusByList[list.id] ?? 'idle';
+                  const cardsError = cardsState.fetchErrorByList[list.id] ?? null;
+                  const isDeletingList =
+                    listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
 
-              return (
-                <div
-                  key={list.id}
-                  className="flex h-full w-72 min-w-[18rem] flex-shrink-0 flex-col rounded-xl border border-white/40 bg-transparent p-4 text-white shadow-[0_15px_40px_rgba(15,23,42,0.35)] backdrop-blur-sm"
-                >
-                  <div className="mb-3 flex items-start gap-2">
-                    <div className="flex-1">
-                      {isEditing ? (
-                        <form onSubmit={handleUpdateList} className="space-y-1">
-                          <label htmlFor={`edit-list-${list.id}`} className="sr-only">
-                            Edit list title
-                          </label>
-                          <input
-                            id={`edit-list-${list.id}`}
-                            ref={listTitleInputRef}
-                            value={listEditor.title}
-                            onChange={(event) =>
-                              setListEditor((prev) => ({ ...prev, title: event.target.value }))
-                            }
-                            onKeyDown={handleListTitleKeyDown}
-                            className="w-full border-none bg-transparent px-0 py-0 text-base font-semibold text-white focus:outline-none"
-                          />
-                          {listsState.updateError && listsState.updatingId === list.id && (
-                            <p className="text-xs text-red-600">{listsState.updateError}</p>
-                          )}
-                        </form>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => startEditingList(list)}
-                          className="group w-full rounded-md border border-transparent px-2 py-1 text-left text-white transition hover:border-white/30 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                  return (
+                    <SortableList key={list.id} id={list.id}>
+                      {({
+                        attributes,
+                        listeners,
+                        isDragging: isListDragging,
+                        isOver: isListOver,
+                      }) => (
+                        <div
+                          className={`flex max-h-full w-72 min-w-[18rem] flex-shrink-0 flex-col rounded-xl border p-4 text-white backdrop-blur-sm transition-all duration-200 ease-out ${
+                            isListDragging
+                              ? 'border-dashed border-blue-400/60 bg-slate-800/40 shadow-inner'
+                              : isListOver
+                                ? 'border-blue-400 bg-slate-800/90 shadow-[0_20px_50px_rgba(15,23,42,0.45)] ring-2 ring-blue-400/50'
+                                : 'border-white/40 bg-slate-800/80 shadow-[0_15px_40px_rgba(15,23,42,0.35)]'
+                          }`}
                         >
-                          <span className="block text-base font-semibold">{list.title}</span>
-                        </button>
+                          <div className="mb-3 flex items-start gap-2">
+                            {/* Drag handle - separate from title */}
+                            <button
+                              type="button"
+                              className="mt-1 flex-shrink-0 cursor-grab rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
+                              {...attributes}
+                              {...listeners}
+                              aria-label="Drag to reorder list"
+                            >
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                              >
+                                <circle cx="9" cy="5" r="1.5" />
+                                <circle cx="15" cy="5" r="1.5" />
+                                <circle cx="9" cy="12" r="1.5" />
+                                <circle cx="15" cy="12" r="1.5" />
+                                <circle cx="9" cy="19" r="1.5" />
+                                <circle cx="15" cy="19" r="1.5" />
+                              </svg>
+                            </button>
+                            <div className="min-w-0 flex-1">
+                              {isEditing ? (
+                                <form onSubmit={handleUpdateList} className="space-y-1">
+                                  <label htmlFor={`edit-list-${list.id}`} className="sr-only">
+                                    Edit list title
+                                  </label>
+                                  <input
+                                    id={`edit-list-${list.id}`}
+                                    ref={listTitleInputRef}
+                                    value={listEditor.title}
+                                    onChange={(event) =>
+                                      setListEditor((prev) => ({
+                                        ...prev,
+                                        title: event.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={handleListTitleKeyDown}
+                                    onBlur={cancelListEdit}
+                                    className="w-full border-none bg-transparent px-0 py-0 text-base font-semibold text-white focus:outline-none"
+                                  />
+                                  {listsState.updateError && listsState.updatingId === list.id && (
+                                    <p className="text-xs text-red-600">{listsState.updateError}</p>
+                                  )}
+                                </form>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startEditingList(list)}
+                                  className="group w-full rounded-md border border-transparent px-2 py-1 text-left text-white transition hover:border-white/30 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                >
+                                  <span className="block truncate text-base font-semibold">
+                                    {list.title}
+                                  </span>
+                                </button>
+                              )}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteList(list.id)}
+                              disabled={isDeletingList}
+                              className="inline-flex flex-shrink-0 items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
+                            >
+                              {isDeletingList ? 'Deleting…' : 'Delete'}
+                            </button>
+                          </div>
+                          {listsState.deleteError && listsState.deletingId === list.id && (
+                            <p className="-mt-2 mb-2 text-xs text-rose-200">
+                              {listsState.deleteError}
+                            </p>
+                          )}
+
+                          <DroppableListArea id={list.id}>
+                            <SortableContext items={cardIds} strategy={verticalListSortingStrategy}>
+                              {cardsStatus === 'loading' && cards.length === 0 && (
+                                <p className="text-sm text-white/80">Loading cards…</p>
+                              )}
+                              {cardsError && <p className="text-xs text-rose-200">{cardsError}</p>}
+                              {cards.map((card) => (
+                                <SortableCard key={card.id} id={card.id} listId={list.id}>
+                                  <CardListItem
+                                    card={card}
+                                    onOpenDetail={() => handleCardDetailOpen(card.id)}
+                                  />
+                                </SortableCard>
+                              ))}
+                            </SortableContext>
+                          </DroppableListArea>
+
+                          <div className="mt-4">
+                            <button
+                              type="button"
+                              onClick={() => openCreateCardModal(list.id)}
+                              className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
+                            >
+                              + Add card
+                            </button>
+                          </div>
+                        </div>
                       )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteList(list.id)}
-                      disabled={isDeletingList}
-                      className="inline-flex items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
-                    >
-                      {isDeletingList ? 'Deleting…' : 'Delete'}
-                    </button>
-                  </div>
-                  {listsState.deleteError && listsState.deletingId === list.id && (
-                    <p className="-mt-2 mb-2 text-xs text-rose-200">{listsState.deleteError}</p>
-                  )}
+                    </SortableList>
+                  );
+                })}
+              </SortableContext>
+            </div>
 
-                  <div className="flex-1 space-y-2 overflow-y-auto pr-1">
-                    {cardsStatus === 'loading' && cards.length === 0 && (
-                      <p className="text-sm text-white/80">Loading cards…</p>
-                    )}
-                    {cardsError && <p className="text-xs text-rose-200">{cardsError}</p>}
-                    {cards.map((card) => (
-                      <CardListItem
-                        key={card.id}
-                        card={card}
-                        onOpenDetail={() => handleCardDetailOpen(card.id)}
-                      />
-                    ))}
+            <DragOverlay
+              dropAnimation={{
+                duration: 250,
+                easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
+              }}
+            >
+              {activeDragItem?.type === 'list' && activeDragItem.data && (
+                <div className="w-72 min-w-[18rem] rotate-2 rounded-xl border-2 border-blue-400 bg-slate-800 p-4 text-white shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] ring-4 ring-blue-400/30">
+                  <div className="mb-3">
+                    <span className="block text-base font-semibold">
+                      {activeDragItem.data.title}
+                    </span>
                   </div>
-
-                  <div className="mt-4">
-                    <button
-                      type="button"
-                      onClick={() => openCreateCardModal(list.id)}
-                      className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
-                    >
-                      + Add card
-                    </button>
+                  <div className="rounded-lg bg-white/10 p-4 text-center text-sm text-white/70">
+                    {(cardsByList[activeDragItem.data.id] ?? []).length} cards
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              )}
+              {activeDragItem?.type === 'card' && activeDragItem.data && (
+                <div className="w-64 rotate-3 rounded-md border border-blue-400 bg-slate-700 p-3 text-white opacity-90 shadow-xl ring-2 ring-blue-400">
+                  <p className="text-sm font-semibold">{activeDragItem.data.title}</p>
+                </div>
+              )}
+            </DragOverlay>
+          </DndContext>
         </div>
       </div>
 
