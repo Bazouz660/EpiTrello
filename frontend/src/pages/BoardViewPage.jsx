@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import CardDetailModal from '../components/cards/CardDetailModal.jsx';
+import CardListItem from '../components/cards/CardListItem.jsx';
 import { fetchBoardById, selectBoards } from '../features/boards/boardsSlice.js';
 import {
   createCard,
@@ -55,6 +57,7 @@ const BoardViewPage = () => {
   const [listEditor, setListEditor] = useState(emptyListEditor);
   const [cardModal, setCardModal] = useState(emptyCardModalState);
   const [cardModalError, setCardModalError] = useState(null);
+  const [activeCardId, setActiveCardId] = useState(null);
   const listTitleInputRef = useRef(null);
 
   const closeCreateListModal = () => {
@@ -67,7 +70,13 @@ const BoardViewPage = () => {
     setCardModalError(null);
   };
 
+  const closeCardDetail = () => {
+    setActiveCardId(null);
+  };
+
   const isCardModalOpen = cardModal.mode !== null;
+  const activeCard = activeCardId ? cardsState.entities[activeCardId] : null;
+  const isCardDetailOpen = Boolean(activeCard);
 
   const board = boardsState.selectedBoard?.id === boardId ? boardsState.selectedBoard : null;
   const boardBackgroundStyle = buildBoardBackgroundStyle(board?.background ?? defaultBoardTheme);
@@ -77,6 +86,22 @@ const BoardViewPage = () => {
       : null;
   const showBoardLoading =
     !board && (boardsState.selectedStatus === 'idle' || boardsState.selectedStatus === 'loading');
+
+  const boardMembersList = useMemo(() => {
+    if (!board) return [];
+    const members = Array.isArray(board.members) ? board.members : [];
+    const normalized = members
+      .filter((member) => member?.user)
+      .map((member) => ({
+        id: member.user,
+        role: member.role ?? 'member',
+        displayName: member.displayName ?? null,
+      }));
+    if (board.owner && !normalized.some((member) => member.id === board.owner)) {
+      normalized.unshift({ id: board.owner, role: 'owner', displayName: 'Board owner' });
+    }
+    return normalized;
+  }, [board]);
 
   const listsStatus = listsState.fetchStatusByBoard[boardId] ?? 'idle';
   const listsError = listsState.fetchErrorByBoard[boardId] ?? null;
@@ -142,6 +167,25 @@ const BoardViewPage = () => {
   }, [isCardModalOpen]);
 
   useEffect(() => {
+    if (!isCardDetailOpen) return undefined;
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeCardDetail();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isCardDetailOpen]);
+
+  useEffect(() => {
+    if (activeCardId && !cardsState.entities[activeCardId]) {
+      closeCardDetail();
+    }
+  }, [activeCardId, cardsState.entities]);
+
+  useEffect(() => {
     if (!listEditor.id) return;
     const input = listTitleInputRef.current;
     if (input) {
@@ -205,17 +249,6 @@ const BoardViewPage = () => {
     setCardModalError(null);
   };
 
-  const openEditCardModal = (card) => {
-    setCardModal({
-      mode: 'edit',
-      id: card.id,
-      listId: card.list,
-      title: card.title,
-      description: card.description ?? '',
-    });
-    setCardModalError(null);
-  };
-
   const handleDeleteCard = async (cardId) => {
     const confirmed = window.confirm('Delete this card?');
     if (!confirmed) return;
@@ -226,6 +259,24 @@ const BoardViewPage = () => {
     }
   };
 
+  const handleCardDetailOpen = (cardId) => {
+    setActiveCardId(cardId);
+  };
+
+  const saveCardChanges = async (cardId, changes) => {
+    if (!cardId) return;
+    try {
+      await dispatch(
+        updateCard({
+          id: cardId,
+          changes,
+        }),
+      ).unwrap();
+    } catch {
+      // errors handled by slice state
+    }
+  };
+
   const handleCardModalSubmit = async (event) => {
     event.preventDefault();
     if (!isCardModalOpen) return;
@@ -233,25 +284,13 @@ const BoardViewPage = () => {
     if (!title) return;
     setCardModalError(null);
     try {
-      if (cardModal.mode === 'create') {
-        await dispatch(
-          createCard({
-            list: cardModal.listId,
-            title,
-            description: cardModal.description.trim(),
-          }),
-        ).unwrap();
-      } else if (cardModal.mode === 'edit' && cardModal.id) {
-        await dispatch(
-          updateCard({
-            id: cardModal.id,
-            changes: {
-              title,
-              description: cardModal.description.trim(),
-            },
-          }),
-        ).unwrap();
-      }
+      await dispatch(
+        createCard({
+          list: cardModal.listId,
+          title,
+          description: cardModal.description.trim(),
+        }),
+      ).unwrap();
       closeCardModal();
     } catch (error) {
       setCardModalError(
@@ -297,26 +336,28 @@ const BoardViewPage = () => {
   const membershipRole = board.membershipRole ?? 'owner';
   const isOwner = membershipRole === 'owner';
 
-  const cardModalTitle =
-    cardModal.mode === 'edit' ? 'Edit card' : cardModal.mode === 'create' ? 'Add card' : '';
-
-  const cardModalDescription =
-    cardModal.mode === 'edit'
-      ? 'Update the details for this card.'
-      : 'Enter a title to create a new card in this list.';
-
-  const cardModalPrimaryLabel = cardModal.mode === 'edit' ? 'Save changes' : 'Create card';
+  const cardModalTitle = 'Add card';
+  const cardModalDescription = 'Enter a title to create a new card in this list.';
+  const cardModalPrimaryLabel = 'Create card';
 
   const isSubmittingCard =
-    cardModal.mode === 'create'
-      ? cardsState.createStatus === 'loading' && cardsState.creatingListId === cardModal.listId
-      : cardModal.mode === 'edit'
-        ? cardsState.updateStatus === 'loading' && cardsState.updatingId === cardModal.id
-        : false;
+    cardModal.mode === 'create' &&
+    cardsState.createStatus === 'loading' &&
+    cardsState.creatingListId === cardModal.listId;
+
+  const isDeletingActiveCard =
+    isCardDetailOpen &&
+    cardsState.deleteStatus === 'loading' &&
+    cardsState.deletingId === activeCard?.id;
+
+  const activeCardDeleteError =
+    isCardDetailOpen && cardsState.deleteError && cardsState.deletingId === activeCard?.id
+      ? cardsState.deleteError
+      : null;
 
   return (
     <section
-      className="relative -mx-6 -my-8 min-h-[calc(100vh-120px)] overflow-hidden"
+      className="relative -mx-6 -my-8 min-h-[calc(100vh-120px)]"
       style={boardBackgroundStyle}
     >
       <div className="absolute inset-0 bg-slate-900/60" aria-hidden="true" />
@@ -371,8 +412,6 @@ const BoardViewPage = () => {
               const cardsError = cardsState.fetchErrorByList[list.id] ?? null;
               const isDeletingList =
                 listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
-              const isUpdatingList =
-                listsState.updateStatus === 'loading' && listsState.updatingId === list.id;
 
               return (
                 <div
@@ -382,7 +421,7 @@ const BoardViewPage = () => {
                   <div className="mb-3 flex items-start gap-2">
                     <div className="flex-1">
                       {isEditing ? (
-                        <form onSubmit={handleUpdateList} className="flex flex-col gap-2">
+                        <form onSubmit={handleUpdateList} className="space-y-1">
                           <label htmlFor={`edit-list-${list.id}`} className="sr-only">
                             Edit list title
                           </label>
@@ -394,27 +433,11 @@ const BoardViewPage = () => {
                               setListEditor((prev) => ({ ...prev, title: event.target.value }))
                             }
                             onKeyDown={handleListTitleKeyDown}
-                            className="w-full rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
+                            className="w-full border-none bg-transparent px-0 py-0 text-base font-semibold text-white focus:outline-none"
                           />
                           {listsState.updateError && listsState.updatingId === list.id && (
                             <p className="text-xs text-red-600">{listsState.updateError}</p>
                           )}
-                          <div className="flex gap-2 text-xs">
-                            <button
-                              type="submit"
-                              disabled={isUpdatingList}
-                              className="bg-primary text-primary-foreground inline-flex flex-1 items-center justify-center rounded-md px-2 py-1 font-medium disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                              {isUpdatingList ? 'Saving…' : 'Save'}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={cancelListEdit}
-                              className="inline-flex flex-1 items-center justify-center rounded-md border border-slate-300 px-2 py-1 font-medium text-slate-700"
-                            >
-                              Cancel
-                            </button>
-                          </div>
                         </form>
                       ) : (
                         <button
@@ -423,9 +446,6 @@ const BoardViewPage = () => {
                           className="group w-full rounded-md border border-transparent px-2 py-1 text-left text-white transition hover:border-white/30 hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
                         >
                           <span className="block text-base font-semibold">{list.title}</span>
-                          <span className="text-[11px] font-medium uppercase tracking-wide text-white/70 opacity-0 transition group-hover:opacity-100">
-                            Click to rename
-                          </span>
                         </button>
                       )}
                     </div>
@@ -447,44 +467,13 @@ const BoardViewPage = () => {
                       <p className="text-sm text-white/80">Loading cards…</p>
                     )}
                     {cardsError && <p className="text-xs text-rose-200">{cardsError}</p>}
-                    {cards.map((card) => {
-                      const isDeletingCard =
-                        cardsState.deleteStatus === 'loading' && cardsState.deletingId === card.id;
-
-                      return (
-                        <div
-                          key={card.id}
-                          className="space-y-2 rounded-md border border-white/30 p-2"
-                        >
-                          <div>
-                            <h4 className="text-sm font-medium text-white">{card.title}</h4>
-                            {card.description && (
-                              <p className="text-xs text-white/80">{card.description}</p>
-                            )}
-                          </div>
-                          <div className="flex flex-wrap gap-2 text-xs">
-                            <button
-                              type="button"
-                              onClick={() => openEditCardModal(card)}
-                              className="inline-flex items-center rounded-md border border-white/30 px-2 py-1 font-medium text-white hover:bg-white/10"
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteCard(card.id)}
-                              disabled={isDeletingCard}
-                              className="inline-flex items-center rounded-md border border-rose-200/60 px-2 py-1 font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-70"
-                            >
-                              {isDeletingCard ? 'Deleting…' : 'Delete'}
-                            </button>
-                          </div>
-                          {cardsState.deleteError && cardsState.deletingId === card.id && (
-                            <p className="text-xs text-rose-200">{cardsState.deleteError}</p>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {cards.map((card) => (
+                      <CardListItem
+                        key={card.id}
+                        card={card}
+                        onOpenDetail={() => handleCardDetailOpen(card.id)}
+                      />
+                    ))}
                   </div>
 
                   <div className="mt-4">
@@ -659,6 +648,26 @@ const BoardViewPage = () => {
             </form>
           </div>
         </div>
+      )}
+
+      {isCardDetailOpen && activeCard && (
+        <CardDetailModal
+          card={activeCard}
+          boardMembers={boardMembersList}
+          onClose={closeCardDetail}
+          onUpdateCard={(changes) => saveCardChanges(activeCard.id, changes)}
+          isSaving={
+            cardsState.updateStatus === 'loading' && cardsState.updatingId === activeCard.id
+          }
+          updateError={
+            cardsState.updateError && cardsState.updatingId === activeCard.id
+              ? cardsState.updateError
+              : null
+          }
+          onDelete={() => handleDeleteCard(activeCard.id)}
+          isDeleting={isDeletingActiveCard}
+          deleteError={activeCardDeleteError}
+        />
       )}
     </section>
   );

@@ -42,6 +42,8 @@ describe('Card API', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ title: 'Card 1', list: listId });
     expect(c1.status).toBe(201);
+    expect(c1.body.card.activity).toHaveLength(1);
+    expect(c1.body.card.activity[0].message).toBe('Card created');
 
     const c2 = await request(app)
       .post('/api/cards')
@@ -89,6 +91,7 @@ describe('Card API', () => {
       .set('Authorization', `Bearer ${token}`);
     expect(getRes.status).toBe(200);
     expect(getRes.body.card.title).toBe('MoveMe');
+    expect(getRes.body.card.activity[0].message).toBe('Card created');
 
     // move card to list B
     const moveRes = await request(app)
@@ -105,6 +108,7 @@ describe('Card API', () => {
       .send({ title: 'Moved and Updated', description: 'desc' });
     expect(updRes.status).toBe(200);
     expect(updRes.body.card.title).toBe('Moved and Updated');
+    expect(updRes.body.card.activity.some((entry) => entry.message === 'Title updated')).toBe(true);
 
     // delete
     const delRes = await request(app)
