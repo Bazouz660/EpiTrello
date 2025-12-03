@@ -73,6 +73,8 @@ const buildState = () => ({
       title: 'Project Eagle',
       description: 'Ship it',
       membershipRole: 'owner',
+      owner: 'owner-1',
+      members: [{ user: 'mem-1', role: 'member' }],
       background: { type: 'color', value: '#0f172a' },
     },
     selectedStatus: 'succeeded',
@@ -103,6 +105,29 @@ const buildState = () => ({
         description: 'Add lint step',
         list: 'list-1',
         position: 0,
+        dueDate: '2025-01-01T12:00:00.000Z',
+        labels: [{ color: '#0284c7', text: 'Dev' }],
+        assignedMembers: ['mem-1'],
+        checklist: [
+          { text: 'Add lint', completed: true },
+          { text: 'Add tests', completed: false },
+        ],
+        comments: [
+          {
+            id: 'comment-1',
+            text: 'Great work',
+            author: 'mem-1',
+            createdAt: '2025-01-02T09:00:00.000Z',
+          },
+        ],
+        activity: [
+          {
+            id: 'activity-1',
+            message: 'Card created',
+            actor: 'owner-1',
+            createdAt: '2024-12-31T10:00:00.000Z',
+          },
+        ],
       },
     },
     idsByList: { 'list-1': ['card-1'] },
@@ -140,7 +165,8 @@ describe('BoardViewPage', () => {
     expect(screen.getByRole('heading', { name: 'Project Eagle' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /to do/i })).toBeInTheDocument();
     expect(screen.getByText('Set up CI')).toBeInTheDocument();
-    expect(screen.getByText('Add lint step')).toBeInTheDocument();
+    expect(screen.queryByText('Add lint step')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Card has description')).toBeInTheDocument();
   });
 
   it('submits the add list form through the dispatcher', async () => {
@@ -174,27 +200,88 @@ describe('BoardViewPage', () => {
     expect(mockDispatch).toHaveBeenCalledTimes(1);
   });
 
-  it('submits edits for an existing card from the modal', async () => {
+  it('opens the card detail view with metadata when a card is clicked', async () => {
+    const user = userEvent.setup();
+    renderWithRouter();
+
+    await user.click(screen.getByLabelText('Open details for Set up CI'));
+    expect(screen.getByRole('button', { name: 'Edit details' })).toBeInTheDocument();
+    expect(screen.getByText('Add lint step')).toBeInTheDocument();
+    expect(screen.getByText('Dev')).toBeInTheDocument();
+    expect(screen.getAllByText('Member · mem-1').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Great work')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText('Close'));
+    expect(screen.queryByRole('button', { name: 'Edit details' })).not.toBeInTheDocument();
+  });
+
+  it('saves card updates through the single edit/save flow', async () => {
     const user = userEvent.setup();
     renderWithRouter();
 
     mockDispatch.mockClear();
-    await user.click(screen.getByRole('button', { name: 'Edit' }));
-    const titleInput = screen.getByLabelText('Title');
-    expect(titleInput).toHaveValue('Set up CI');
+    await user.click(screen.getByLabelText('Open details for Set up CI'));
+    await user.click(screen.getByRole('button', { name: 'Edit details' }));
 
-    await user.clear(titleInput);
-    await user.type(titleInput, 'Set up CI - updated');
+    const titleField = screen.getByLabelText('Card title');
+    await user.clear(titleField);
+    await user.type(titleField, 'CI v2');
+
+    const descriptionField = screen.getByLabelText('Card description');
+    await user.clear(descriptionField);
+    await user.type(descriptionField, 'Update the lint workflow');
+
+    const dueDateInput = screen.getByLabelText('Card due date');
+    await user.clear(dueDateInput);
+    await user.type(dueDateInput, '2025-02-14T10:30');
+
+    await user.click(screen.getByRole('button', { name: 'Add label' }));
+    const secondLabelInput = screen.getByLabelText('Label 2 text');
+    await user.type(secondLabelInput, 'Docs');
+
+    await user.click(screen.getByLabelText('Assign Board owner'));
+
+    await user.click(screen.getByRole('button', { name: 'Add item' }));
+    const checklistInput = screen.getByLabelText('Checklist item 3');
+    await user.type(checklistInput, 'Verify docs');
+
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
 
+    const expectedIso = new Date('2025-02-14T10:30').toISOString();
+    expect(mockUpdateCard).toHaveBeenCalledTimes(1);
     expect(mockUpdateCard).toHaveBeenCalledWith({
       id: 'card-1',
       changes: {
-        title: 'Set up CI - updated',
-        description: 'Add lint step',
+        title: 'CI v2',
+        description: 'Update the lint workflow',
+        dueDate: expectedIso,
+        labels: [
+          { color: '#0284c7', text: 'Dev' },
+          { color: '#0f172a', text: 'Docs' },
+        ],
+        assignedMembers: ['mem-1', 'owner-1'],
+        checklist: [
+          { text: 'Add lint', completed: true },
+          { text: 'Add tests', completed: false },
+          { text: 'Verify docs', completed: false },
+        ],
       },
     });
     expect(mockDispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('deletes cards via the detail modal controls', async () => {
+    const user = userEvent.setup();
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderWithRouter();
+
+    mockDispatch.mockClear();
+    await user.click(screen.getByLabelText('Open details for Set up CI'));
+    await user.click(screen.getByRole('button', { name: 'Delete card' }));
+
+    expect(mockDeleteCard).toHaveBeenCalledWith({ id: 'card-1' });
+    expect(mockDispatch).toHaveBeenCalledTimes(1);
+    confirmSpy.mockRestore();
   });
 
   it('allows inline editing of list titles', async () => {
@@ -205,7 +292,7 @@ describe('BoardViewPage', () => {
     const input = screen.getByLabelText('Edit list title');
     await user.clear(input);
     await user.type(input, 'Production ready');
-    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.keyboard('{Enter}');
 
     expect(mockUpdateList).toHaveBeenCalledWith({
       id: 'list-1',

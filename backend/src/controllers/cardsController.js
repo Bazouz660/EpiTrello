@@ -1,6 +1,42 @@
+import mongoose from 'mongoose';
+
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+
+const { Types } = mongoose;
+
+const mapComment = (comment = {}) => ({
+  id: comment.id ?? comment._id?.toString() ?? '',
+  text: comment.text ?? '',
+  author: comment.author ? comment.author.toString() : null,
+  createdAt: comment.createdAt ?? null,
+});
+
+const mapActivityEntry = (entry = {}) => ({
+  id: entry.id ?? entry._id?.toString() ?? '',
+  message: entry.message ?? '',
+  actor: entry.actor ? entry.actor.toString() : null,
+  createdAt: entry.createdAt ?? null,
+});
+
+const buildActivityEntry = (message, actorId) => ({
+  id: new Types.ObjectId().toString(),
+  message,
+  actor: actorId ?? null,
+  createdAt: new Date(),
+});
+
+const normalizeValue = (value) => {
+  if (value instanceof Date) return value.toISOString();
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value) || typeof value === 'object') {
+    return JSON.stringify(value);
+  }
+  return value;
+};
+
+const didChange = (previous, next) => normalizeValue(previous) !== normalizeValue(next);
 
 const toResponse = (card) => ({
   id: card._id.toString(),
@@ -11,7 +47,11 @@ const toResponse = (card) => ({
   labels: card.labels || [],
   dueDate: card.dueDate || null,
   checklist: card.checklist || [],
-  assignedMembers: card.assignedMembers || [],
+  assignedMembers: (card.assignedMembers || []).map((member) =>
+    member?.toString ? member.toString() : member,
+  ),
+  comments: (card.comments || []).map(mapComment),
+  activity: (card.activity || []).map(mapActivityEntry),
   archived: card.archived || false,
 });
 
@@ -41,7 +81,13 @@ export const createCard = async (req, res, next) => {
       pos = max.length ? max[0].position + 1 : 0;
     }
 
-    const card = new Card({ title, description, list: listId, position: pos });
+    const card = new Card({
+      title,
+      description,
+      list: listId,
+      position: pos,
+      activity: [buildActivityEntry('Card created', req.user._id)],
+    });
     await card.save();
 
     return res.status(201).json({ card: toResponse(card) });
@@ -114,6 +160,8 @@ export const updateCard = async (req, res, next) => {
       card.list = updates.list;
     }
 
+    const activityMessages = [];
+
     const fields = [
       'title',
       'description',
@@ -125,8 +173,48 @@ export const updateCard = async (req, res, next) => {
       'archived',
     ];
     for (const f of fields) {
-      if (updates[f] !== undefined) card[f] = updates[f];
+      if (updates[f] === undefined) continue;
+      if (
+        [
+          'title',
+          'description',
+          'labels',
+          'dueDate',
+          'checklist',
+          'assignedMembers',
+          'position',
+        ].includes(f)
+      ) {
+        if (didChange(card[f], updates[f])) {
+          const message =
+            f === 'title'
+              ? 'Title updated'
+              : f === 'description'
+                ? 'Description updated'
+                : f === 'dueDate'
+                  ? updates[f]
+                    ? 'Due date set'
+                    : 'Due date cleared'
+                  : f === 'labels'
+                    ? 'Labels updated'
+                    : f === 'checklist'
+                      ? 'Checklist updated'
+                      : f === 'assignedMembers'
+                        ? 'Assignees updated'
+                        : f === 'position'
+                          ? 'Card reordered'
+                          : null;
+          if (message) {
+            activityMessages.push(message);
+          }
+        }
+      }
+      card[f] = updates[f];
     }
+
+    activityMessages.forEach((message) => {
+      card.activity.push(buildActivityEntry(message, req.user._id));
+    });
 
     await card.save();
     return res.status(200).json({ card: toResponse(card) });
