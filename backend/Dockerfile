@@ -14,5 +14,6 @@ COPY . .
 
 FROM base AS production
 COPY --from=build /app .
-EXPOSE 5000
+EXPOSE 8080
+ENV PORT=8080
 CMD ["node", "src/server.js"]

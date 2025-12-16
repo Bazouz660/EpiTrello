@@ -1,0 +1,133 @@
+name: CD
+
+on:
+  push:
+    branches: [main, dev]
+    paths-ignore:
+      - '**.md'
+      - 'doc/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environnement de déploiement'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  # ============================================
+  # JOB 1: Tests (gate before deployment)
+  # ============================================
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run linters
+        run: npm run lint
+
+      - name: Run tests
+        run: npm test
+
+  # ============================================
+  # JOB 2: Deploy Backend to Fly.io
+  # ============================================
+  deploy-backend:
+    name: Deploy Backend
+    needs: test
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
+      url: https://epitrello-backend.fly.dev
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy Backend to Fly.io
+        working-directory: ./backend
+        run: |
+          flyctl deploy --remote-only \
+            --app epitrello-backend \
+            --env CLIENT_URL=https://epitrello-frontend.fly.dev \
+            --ha=false
+
+      - name: Verify Backend Health
+        run: |
+          echo "Waiting for backend to be healthy..."
+          sleep 10
+          curl -f https://epitrello-backend.fly.dev/api/health || exit 1
+          echo "✅ Backend is healthy!"
+
+  # ============================================
+  # JOB 3: Deploy Frontend to Fly.io
+  # ============================================
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: [test, deploy-backend]
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.event.inputs.environment || 'staging' }}
+      url: https://epitrello-frontend.fly.dev
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Fly.io CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy Frontend to Fly.io
+        working-directory: ./frontend
+        run: |
+          flyctl deploy --remote-only \
+            --app epitrello-frontend \
+            --build-arg VITE_API_URL=https://epitrello-backend.fly.dev/api \
+            --ha=false
+
+      - name: Verify Frontend
+        run: |
+          echo "Waiting for frontend to be ready..."
+          sleep 10
+          curl -f https://epitrello-frontend.fly.dev || exit 1
+          echo "✅ Frontend is live!"
+
+  # ============================================
+  # JOB 4: Summary
+  # ============================================
+  deployment-summary:
+    name: Deployment Summary
+    needs: [deploy-backend, deploy-frontend]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Print Summary
+        run: |
+          echo "🚀 Deployment Complete!"
+          echo ""
+          echo "📦 Backend:  https://epitrello-backend.fly.dev"
+          echo "🖥️  Frontend: https://epitrello-frontend.fly.dev"
+          echo "🔗 API:      https://epitrello-backend.fly.dev/api"
+          echo ""
+          echo "📊 Health Check: https://epitrello-backend.fly.dev/api/health"
