@@ -11,10 +11,10 @@ on:
       environment:
         description: 'Environnement de déploiement'
         required: true
-        default: 'staging'
+        default: 'dev'
         type: choice
         options:
-          - staging
+          - dev
           - production
 
 env:
@@ -22,7 +22,53 @@ env:
 
 jobs:
   # ============================================
-  # JOB 1: Tests (gate before deployment)
+  # JOB 1: Set environment variables
+  # ============================================
+  setup:
+    name: Setup Environment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.set-env.outputs.environment }}
+      backend_app: ${{ steps.set-env.outputs.backend_app }}
+      frontend_app: ${{ steps.set-env.outputs.frontend_app }}
+      backend_url: ${{ steps.set-env.outputs.backend_url }}
+      frontend_url: ${{ steps.set-env.outputs.frontend_url }}
+
+    steps:
+      - name: Determine environment
+        id: set-env
+        run: |
+          # Determine environment from branch or manual input
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            ENV="${{ github.event.inputs.environment }}"
+          elif [ "${{ github.ref_name }}" == "main" ]; then
+            ENV="production"
+          else
+            ENV="dev"
+          fi
+
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+
+          if [ "$ENV" == "production" ]; then
+            echo "backend_app=epitrello-backend" >> $GITHUB_OUTPUT
+            echo "frontend_app=epitrello-frontend" >> $GITHUB_OUTPUT
+            echo "backend_url=https://epitrello-backend.fly.dev" >> $GITHUB_OUTPUT
+            echo "frontend_url=https://epitrello-frontend.fly.dev" >> $GITHUB_OUTPUT
+          else
+            echo "backend_app=epitrello-backend-dev" >> $GITHUB_OUTPUT
+            echo "frontend_app=epitrello-frontend-dev" >> $GITHUB_OUTPUT
+            echo "backend_url=https://epitrello-backend-dev.fly.dev" >> $GITHUB_OUTPUT
+            echo "frontend_url=https://epitrello-frontend-dev.fly.dev" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Print environment info
+        run: |
+          echo "🌍 Environment: ${{ steps.set-env.outputs.environment }}"
+          echo "📦 Backend App: ${{ steps.set-env.outputs.backend_app }}"
+          echo "🖥️ Frontend App: ${{ steps.set-env.outputs.frontend_app }}"
+
+  # ============================================
+  # JOB 2: Tests (gate before deployment)
   # ============================================
   test:
     name: Run Tests
@@ -47,15 +93,15 @@ jobs:
         run: npm test
 
   # ============================================
-  # JOB 2: Deploy Backend to Fly.io
+  # JOB 3: Deploy Backend to Fly.io
   # ============================================
   deploy-backend:
-    name: Deploy Backend
-    needs: test
+    name: Deploy Backend (${{ needs.setup.outputs.environment }})
+    needs: [setup, test]
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event.inputs.environment || 'staging' }}
-      url: https://epitrello-backend.fly.dev
+      name: ${{ needs.setup.outputs.environment }}
+      url: ${{ needs.setup.outputs.backend_url }}
 
     steps:
       - name: Checkout repository
@@ -68,27 +114,27 @@ jobs:
         working-directory: ./backend
         run: |
           flyctl deploy --remote-only \
-            --app epitrello-backend \
-            --env CLIENT_URL=https://epitrello-frontend.fly.dev \
+            --app ${{ needs.setup.outputs.backend_app }} \
+            --env CLIENT_URL=${{ needs.setup.outputs.frontend_url }} \
             --ha=false
 
       - name: Verify Backend Health
         run: |
           echo "Waiting for backend to be healthy..."
           sleep 10
-          curl -f https://epitrello-backend.fly.dev/api/health || exit 1
+          curl -f ${{ needs.setup.outputs.backend_url }}/api/health || exit 1
           echo "✅ Backend is healthy!"
 
   # ============================================
-  # JOB 3: Deploy Frontend to Fly.io
+  # JOB 4: Deploy Frontend to Fly.io
   # ============================================
   deploy-frontend:
-    name: Deploy Frontend
-    needs: [test, deploy-backend]
+    name: Deploy Frontend (${{ needs.setup.outputs.environment }})
+    needs: [setup, test, deploy-backend]
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.event.inputs.environment || 'staging' }}
-      url: https://epitrello-frontend.fly.dev
+      name: ${{ needs.setup.outputs.environment }}
+      url: ${{ needs.setup.outputs.frontend_url }}
 
     steps:
       - name: Checkout repository
@@ -101,23 +147,23 @@ jobs:
         working-directory: ./frontend
         run: |
           flyctl deploy --remote-only \
-            --app epitrello-frontend \
-            --build-arg VITE_API_URL=https://epitrello-backend.fly.dev/api \
+            --app ${{ needs.setup.outputs.frontend_app }} \
+            --build-arg VITE_API_URL=${{ needs.setup.outputs.backend_url }}/api \
             --ha=false
 
       - name: Verify Frontend
         run: |
           echo "Waiting for frontend to be ready..."
           sleep 10
-          curl -f https://epitrello-frontend.fly.dev || exit 1
+          curl -f ${{ needs.setup.outputs.frontend_url }} || exit 1
           echo "✅ Frontend is live!"
 
   # ============================================
-  # JOB 4: Summary
+  # JOB 5: Summary
   # ============================================
   deployment-summary:
     name: Deployment Summary
-    needs: [deploy-backend, deploy-frontend]
+    needs: [setup, deploy-backend, deploy-frontend]
     runs-on: ubuntu-latest
     if: always()
 
@@ -126,8 +172,12 @@ jobs:
         run: |
           echo "🚀 Deployment Complete!"
           echo ""
-          echo "📦 Backend:  https://epitrello-backend.fly.dev"
-          echo "🖥️  Frontend: https://epitrello-frontend.fly.dev"
+          echo "🌍 Environment: ${{ needs.setup.outputs.environment }}"
+          echo "📦 Backend:  ${{ needs.setup.outputs.backend_url }}"
+          echo "🖥️  Frontend: ${{ needs.setup.outputs.frontend_url }}"
+          echo "🔗 API:      ${{ needs.setup.outputs.backend_url }}/api"
+          echo ""
+          echo "📊 Health Check: ${{ needs.setup.outputs.backend_url }}/api/health"
           echo "🔗 API:      https://epitrello-backend.fly.dev/api"
           echo ""
           echo "📊 Health Check: https://epitrello-backend.fly.dev/api/health"
