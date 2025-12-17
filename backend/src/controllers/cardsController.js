@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+import { canView, canEdit } from './boardsController.js';
 
 const { Types } = mongoose;
 
@@ -55,13 +56,6 @@ const toResponse = (card) => ({
   archived: card.archived || false,
 });
 
-const ensureBoardAccess = (board, userId) => {
-  if (!board) return false;
-  const isOwner = board.owner?.toString() === userId.toString();
-  const isMember = board.members?.some((m) => m.user?.toString() === userId.toString());
-  return isOwner || isMember;
-};
-
 export const createCard = async (req, res, next) => {
   try {
     const { title, list: listId, position, description = '' } = req.body;
@@ -71,8 +65,8 @@ export const createCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    if (!ensureBoardAccess(board, req.user._id))
-      return res.status(403).json({ message: 'Forbidden' });
+    // Only members or higher can create cards (viewers cannot)
+    if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     // compute position if not provided
     let pos = position;
@@ -106,8 +100,8 @@ export const listCards = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    if (!ensureBoardAccess(board, req.user._id))
-      return res.status(403).json({ message: 'Forbidden' });
+    // Any role can view cards
+    if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const cards = await Card.find({ list: listId }).sort({ position: 1 });
     return res.status(200).json({ cards: cards.map(toResponse) });
@@ -126,8 +120,8 @@ export const getCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    if (!ensureBoardAccess(board, req.user._id))
-      return res.status(403).json({ message: 'Forbidden' });
+    // Any role can view a card
+    if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     return res.status(200).json({ card: toResponse(card) });
   } catch (error) {
@@ -147,15 +141,15 @@ export const updateCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    if (!ensureBoardAccess(board, req.user._id))
-      return res.status(403).json({ message: 'Forbidden' });
+    // Only members or higher can update cards (viewers cannot)
+    if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     // allow moving to another list
     if (updates.list && updates.list !== card.list.toString()) {
       const newList = await List.findById(updates.list);
       if (!newList) return res.status(404).json({ message: 'Target list not found' });
       const newBoard = await Board.findById(newList.board);
-      if (!ensureBoardAccess(newBoard, req.user._id))
+      if (!canEdit(newBoard, req.user._id))
         return res.status(403).json({ message: 'Forbidden to move to target list' });
       card.list = updates.list;
     }
@@ -234,8 +228,8 @@ export const deleteCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    if (!ensureBoardAccess(board, req.user._id))
-      return res.status(403).json({ message: 'Forbidden' });
+    // Only members or higher can delete cards (viewers cannot)
+    if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     await card.deleteOne();
     return res.status(204).send();
@@ -256,7 +250,8 @@ export const moveCard = async (req, res, next) => {
     if (!sourceList) return res.status(404).json({ message: 'Source list not found' });
 
     const sourceBoard = await Board.findById(sourceList.board);
-    if (!ensureBoardAccess(sourceBoard, req.user._id)) {
+    // Only members or higher can move cards (viewers cannot)
+    if (!canEdit(sourceBoard, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -264,7 +259,7 @@ export const moveCard = async (req, res, next) => {
     if (!targetList) return res.status(404).json({ message: 'Target list not found' });
 
     const targetBoard = await Board.findById(targetList.board);
-    if (!ensureBoardAccess(targetBoard, req.user._id)) {
+    if (!canEdit(targetBoard, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden to move to target list' });
     }
 

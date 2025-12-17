@@ -22,12 +22,37 @@ const sanitizeBackground = (background = {}) => {
 
 const resolveMembershipRole = (board, userId) => {
   const currentUserId = userId?.toString();
-  if (!currentUserId) return 'viewer';
+  if (!currentUserId) return null;
   if (board.owner?.toString() === currentUserId) return 'owner';
 
   const member = board.members?.find((entry) => entry.user?.toString() === currentUserId);
-  return member?.role ?? 'member';
+  return member?.role ?? null;
 };
+
+// Permission levels hierarchy: owner > admin > member > viewer
+// Returns true if the user has at least the required role
+const hasPermission = (board, userId, requiredRole) => {
+  const role = resolveMembershipRole(board, userId);
+  if (!role) return false;
+
+  const roleHierarchy = ['viewer', 'member', 'admin', 'owner'];
+  const userRoleIndex = roleHierarchy.indexOf(role);
+  const requiredRoleIndex = roleHierarchy.indexOf(requiredRole);
+
+  return userRoleIndex >= requiredRoleIndex;
+};
+
+// Check if user can view the board (any role)
+const canView = (board, userId) => hasPermission(board, userId, 'viewer');
+
+// Check if user can edit lists/cards (member or higher)
+const canEdit = (board, userId) => hasPermission(board, userId, 'member');
+
+// Check if user can manage board settings/members (admin or higher)
+const canManage = (board, userId) => hasPermission(board, userId, 'admin');
+
+// Export permission helpers for use in other controllers
+export { resolveMembershipRole, hasPermission, canView, canEdit, canManage };
 
 const toResponse = (board, userId) => ({
   id: board._id.toString(),
@@ -76,10 +101,8 @@ export const getBoard = async (req, res, next) => {
     const board = await Board.findById(id);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
-    // owner or member check
-    const isOwner = board.owner?.toString() === req.user._id.toString();
-    const isMember = board.members?.some((m) => m.user?.toString() === req.user._id.toString());
-    if (!isOwner && !isMember) return res.status(403).json({ message: 'Forbidden' });
+    // Any role (viewer or higher) can view the board
+    if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     return res.status(200).json({ board: toResponse(board, req.user._id) });
   } catch (error) {
@@ -95,7 +118,8 @@ export const updateBoard = async (req, res, next) => {
     const board = await Board.findById(id);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
-    if (board.owner?.toString() !== req.user._id.toString()) {
+    // Only owner and admin can update board settings
+    if (!canManage(board, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
