@@ -2,6 +2,7 @@ import request from 'supertest';
 import { describe, expect, it } from 'vitest';
 
 import app from '../src/app.js';
+import { Board } from '../src/models/Board.js';
 
 import { setupTestDatabase } from './helpers/setupTestDatabase.js';
 
@@ -13,8 +14,9 @@ const userCredentials = {
   password: 'SuperSecurePass1',
 };
 
-const registerAndLogin = async () => {
-  const response = await request(app).post('/api/auth/register').send(userCredentials);
+const registerAndLogin = async (overrides = {}) => {
+  const payload = { ...userCredentials, ...overrides };
+  const response = await request(app).post('/api/auth/register').send(payload);
   return {
     token: response.body.token,
     user: response.body.user,
@@ -120,5 +122,170 @@ describe('Card API', () => {
       .get(`/api/cards/${cardId}`)
       .set('Authorization', `Bearer ${token}`);
     expect(fetchAfter.status).toBe(404);
+  });
+});
+
+describe('Card Permission Levels', () => {
+  it('allows viewer to read cards but not create', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'cardviewer',
+      email: 'cardviewer@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Viewer Card Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Test List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    await Board.findByIdAndUpdate(boardId, {
+      $push: { members: { user: viewer.user.id, role: 'viewer' } },
+    });
+
+    // Owner creates a card
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Owner Card', list: listId });
+    expect(cardRes.status).toBe(201);
+
+    // Viewer can read cards
+    const readRes = await request(app)
+      .get(`/api/cards?list=${listId}`)
+      .set('Authorization', `Bearer ${viewer.token}`);
+    expect(readRes.status).toBe(200);
+    expect(readRes.body.cards).toHaveLength(1);
+
+    // Viewer cannot create a card
+    const createRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${viewer.token}`)
+      .send({ title: 'Viewer Card', list: listId });
+    expect(createRes.status).toBe(403);
+  });
+
+  it('prevents viewer from updating a card', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'cardviewerupd',
+      email: 'cardviewerupd@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Viewer Update Card Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Test List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Test Card', list: listId });
+    const cardId = cardRes.body.card.id;
+
+    await Board.findByIdAndUpdate(boardId, {
+      $push: { members: { user: viewer.user.id, role: 'viewer' } },
+    });
+
+    const updateRes = await request(app)
+      .patch(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${viewer.token}`)
+      .send({ title: 'Hacked' });
+
+    expect(updateRes.status).toBe(403);
+  });
+
+  it('prevents viewer from deleting a card', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'cardviewerdel',
+      email: 'cardviewerdel@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Viewer Delete Card Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Test List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Delete Card', list: listId });
+    const cardId = cardRes.body.card.id;
+
+    await Board.findByIdAndUpdate(boardId, {
+      $push: { members: { user: viewer.user.id, role: 'viewer' } },
+    });
+
+    const deleteRes = await request(app)
+      .delete(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${viewer.token}`);
+
+    expect(deleteRes.status).toBe(403);
+  });
+
+  it('allows member to create, update and delete cards', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'cardmember',
+      email: 'cardmember@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Member Card Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Test List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    await Board.findByIdAndUpdate(boardId, {
+      $push: { members: { user: member.user.id, role: 'member' } },
+    });
+
+    // Member can create a card
+    const createRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ title: 'Member Card', list: listId });
+    expect(createRes.status).toBe(201);
+    const cardId = createRes.body.card.id;
+
+    // Member can update a card
+    const updateRes = await request(app)
+      .patch(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ title: 'Member Card Updated' });
+    expect(updateRes.status).toBe(200);
+
+    // Member can delete a card
+    const deleteRes = await request(app)
+      .delete(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${member.token}`);
+    expect(deleteRes.status).toBe(204);
   });
 });

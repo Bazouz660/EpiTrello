@@ -180,3 +180,119 @@ describe('Board API', () => {
     expect(fetchAfterDeletion.status).toBe(404);
   });
 });
+
+describe('Board Permission Levels', () => {
+  it('allows admin to update a board', async () => {
+    const owner = await registerAndLogin();
+    const admin = await registerAndLogin({
+      username: 'adminuser',
+      email: 'admin@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Admin Test Board' });
+
+    await Board.findByIdAndUpdate(creation.body.board.id, {
+      $push: { members: { user: admin.user.id, role: 'admin' } },
+    });
+
+    const response = await request(app)
+      .patch(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${admin.token}`)
+      .send({ title: 'Updated by Admin' });
+
+    expect(response.status).toBe(200);
+    expect(response.body.board.title).toBe('Updated by Admin');
+  });
+
+  it('allows member to view a board but not update', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'memberuser',
+      email: 'member@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Member Test Board' });
+
+    await Board.findByIdAndUpdate(creation.body.board.id, {
+      $push: { members: { user: member.user.id, role: 'member' } },
+    });
+
+    // Member can view
+    const viewResponse = await request(app)
+      .get(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${member.token}`);
+
+    expect(viewResponse.status).toBe(200);
+    expect(viewResponse.body.board.title).toBe('Member Test Board');
+
+    // Member cannot update
+    const updateResponse = await request(app)
+      .patch(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${member.token}`)
+      .send({ title: 'Should Fail' });
+
+    expect(updateResponse.status).toBe(403);
+  });
+
+  it('allows viewer to view a board but not update', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'vieweruser',
+      email: 'viewer@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Viewer Test Board' });
+
+    await Board.findByIdAndUpdate(creation.body.board.id, {
+      $push: { members: { user: viewer.user.id, role: 'viewer' } },
+    });
+
+    // Viewer can view
+    const viewResponse = await request(app)
+      .get(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${viewer.token}`);
+
+    expect(viewResponse.status).toBe(200);
+    expect(viewResponse.body.board.title).toBe('Viewer Test Board');
+
+    // Viewer cannot update
+    const updateResponse = await request(app)
+      .patch(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${viewer.token}`)
+      .send({ title: 'Should Fail' });
+
+    expect(updateResponse.status).toBe(403);
+  });
+
+  it('prevents viewer from deleting a board', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'viewerdelete',
+      email: 'viewerdelete@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'No Delete Board' });
+
+    await Board.findByIdAndUpdate(creation.body.board.id, {
+      $push: { members: { user: viewer.user.id, role: 'viewer' } },
+    });
+
+    const deleteResponse = await request(app)
+      .delete(`/api/boards/${creation.body.board.id}`)
+      .set('Authorization', `Bearer ${viewer.token}`);
+
+    expect(deleteResponse.status).toBe(403);
+  });
+});
