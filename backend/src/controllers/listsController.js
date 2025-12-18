@@ -1,6 +1,7 @@
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+
 import { canView, canEdit } from './boardsController.js';
 
 const toResponse = (list) => ({
