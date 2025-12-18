@@ -623,6 +623,10 @@ const BoardViewPage = () => {
   const membershipRole = board.membershipRole ?? 'owner';
   const isOwner = membershipRole === 'owner';
 
+  // Permission helpers based on role hierarchy: owner > admin > member > viewer
+  const canEdit = ['owner', 'admin', 'member'].includes(membershipRole);
+  const isViewer = membershipRole === 'viewer';
+
   const cardModalTitle = 'Add card';
   const cardModalDescription = 'Enter a title to create a new card in this list.';
   const cardModalPrimaryLabel = 'Create card';
@@ -658,13 +662,15 @@ const BoardViewPage = () => {
             {board.description && <p className="text-sm text-slate-100">{board.description}</p>}
           </div>
           <div className="flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => setIsListModalOpen(true)}
-              className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
-            >
-              Add list
-            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setIsListModalOpen(true)}
+                className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+              >
+                Add list
+              </button>
+            )}
             <Link
               to="/boards"
               className="inline-flex items-center rounded-md border border-white/30 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
@@ -677,6 +683,13 @@ const BoardViewPage = () => {
         {listsError && (
           <div className="mx-auto mb-6 w-full max-w-6xl flex-shrink-0 rounded-lg border border-red-200 bg-red-50/90 p-4 text-sm text-red-700">
             {listsError}
+          </div>
+        )}
+
+        {isViewer && (
+          <div className="mx-auto mb-4 w-full max-w-6xl flex-shrink-0 rounded-lg border border-amber-200/50 bg-amber-500/20 px-4 py-2 text-sm text-amber-100 backdrop-blur">
+            <span className="font-medium">View only</span> — You can view this board but cannot make
+            changes.
           </div>
         )}
 
@@ -727,29 +740,31 @@ const BoardViewPage = () => {
                           }`}
                         >
                           <div className="mb-3 flex items-start gap-2">
-                            {/* Drag handle - separate from title */}
-                            <button
-                              type="button"
-                              className="mt-1 flex-shrink-0 cursor-grab rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
-                              {...attributes}
-                              {...listeners}
-                              aria-label="Drag to reorder list"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
+                            {/* Drag handle - only shown if user can edit */}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="mt-1 flex-shrink-0 cursor-grab rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
+                                {...attributes}
+                                {...listeners}
+                                aria-label="Drag to reorder list"
                               >
-                                <circle cx="9" cy="5" r="1.5" />
-                                <circle cx="15" cy="5" r="1.5" />
-                                <circle cx="9" cy="12" r="1.5" />
-                                <circle cx="15" cy="12" r="1.5" />
-                                <circle cx="9" cy="19" r="1.5" />
-                                <circle cx="15" cy="19" r="1.5" />
-                              </svg>
-                            </button>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                >
+                                  <circle cx="9" cy="5" r="1.5" />
+                                  <circle cx="15" cy="5" r="1.5" />
+                                  <circle cx="9" cy="12" r="1.5" />
+                                  <circle cx="15" cy="12" r="1.5" />
+                                  <circle cx="9" cy="19" r="1.5" />
+                                  <circle cx="15" cy="19" r="1.5" />
+                                </svg>
+                              </button>
+                            )}
                             <div className="min-w-0 flex-1">
                               {isEditing ? (
                                 <form onSubmit={handleUpdateList} className="space-y-1">
@@ -774,7 +789,7 @@ const BoardViewPage = () => {
                                     <p className="text-xs text-red-600">{listsState.updateError}</p>
                                   )}
                                 </form>
-                              ) : (
+                              ) : canEdit ? (
                                 <button
                                   type="button"
                                   onClick={() => startEditingList(list)}
@@ -784,16 +799,24 @@ const BoardViewPage = () => {
                                     {list.title}
                                   </span>
                                 </button>
+                              ) : (
+                                <div className="px-2 py-1">
+                                  <span className="block truncate text-base font-semibold text-white">
+                                    {list.title}
+                                  </span>
+                                </div>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteList(list.id)}
-                              disabled={isDeletingList}
-                              className="inline-flex flex-shrink-0 items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
-                            >
-                              {isDeletingList ? 'Deleting…' : 'Delete'}
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteList(list.id)}
+                                disabled={isDeletingList}
+                                className="inline-flex flex-shrink-0 items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
+                              >
+                                {isDeletingList ? 'Deleting…' : 'Delete'}
+                              </button>
+                            )}
                           </div>
                           {listsState.deleteError && listsState.deletingId === list.id && (
                             <p className="-mt-2 mb-2 text-xs text-rose-200">
@@ -808,7 +831,12 @@ const BoardViewPage = () => {
                               )}
                               {cardsError && <p className="text-xs text-rose-200">{cardsError}</p>}
                               {cards.map((card) => (
-                                <SortableCard key={card.id} id={card.id} listId={list.id}>
+                                <SortableCard
+                                  key={card.id}
+                                  id={card.id}
+                                  listId={list.id}
+                                  disabled={!canEdit}
+                                >
                                   <CardListItem
                                     card={card}
                                     onOpenDetail={() => handleCardDetailOpen(card.id)}
@@ -818,15 +846,17 @@ const BoardViewPage = () => {
                             </SortableContext>
                           </DroppableListArea>
 
-                          <div className="mt-4">
-                            <button
-                              type="button"
-                              onClick={() => openCreateCardModal(list.id)}
-                              className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
-                            >
-                              + Add card
-                            </button>
-                          </div>
+                          {canEdit && (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => openCreateCardModal(list.id)}
+                                className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
+                              >
+                                + Add card
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </SortableList>
@@ -1038,6 +1068,7 @@ const BoardViewPage = () => {
           onDelete={() => handleDeleteCard(activeCard.id)}
           isDeleting={isDeletingActiveCard}
           deleteError={activeCardDeleteError}
+          readOnly={!canEdit}
         />
       )}
     </section>
