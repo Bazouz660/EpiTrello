@@ -20,10 +20,21 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import ShareBoardModal from '../components/boards/ShareBoardModal.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
 import { DroppableListArea, SortableCard, SortableList } from '../components/dnd/index.js';
-import { fetchBoardById, selectBoards } from '../features/boards/boardsSlice.js';
+import { selectAuth } from '../features/auth/authSlice.js';
+import {
+  addBoardMember,
+  fetchBoardById,
+  fetchBoardMembers,
+  removeBoardMember,
+  searchUsers,
+  selectBoards,
+  updateBoardMember,
+  clearMemberErrors,
+} from '../features/boards/boardsSlice.js';
 import {
   createCard,
   deleteCard,
@@ -75,6 +86,7 @@ const BoardViewPage = () => {
   const boardsState = useAppSelector(selectBoards);
   const listsState = useAppSelector(selectLists);
   const cardsState = useAppSelector(selectCards);
+  const authState = useAppSelector(selectAuth);
 
   const [newListTitle, setNewListTitle] = useState('');
   const [isListModalOpen, setIsListModalOpen] = useState(false);
@@ -83,6 +95,9 @@ const BoardViewPage = () => {
   const [cardModalError, setCardModalError] = useState(null);
   const [activeCardId, setActiveCardId] = useState(null);
   const [activeDragItem, setActiveDragItem] = useState(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const listTitleInputRef = useRef(null);
 
   // Custom collision detection that handles lists and cards appropriately
@@ -155,6 +170,68 @@ const BoardViewPage = () => {
   const closeCardDetail = () => {
     setActiveCardId(null);
   };
+
+  const openShareModal = useCallback(() => {
+    setIsShareModalOpen(true);
+    setUserSearchResults([]);
+    dispatch(clearMemberErrors());
+    dispatch(fetchBoardMembers({ boardId }));
+  }, [dispatch, boardId]);
+
+  const closeShareModal = useCallback(() => {
+    setIsShareModalOpen(false);
+    setUserSearchResults([]);
+    dispatch(clearMemberErrors());
+  }, [dispatch]);
+
+  const handleSearchUsers = useCallback(
+    async (query) => {
+      setIsSearchingUsers(true);
+      try {
+        const result = await dispatch(searchUsers({ query })).unwrap();
+        setUserSearchResults(result);
+      } catch {
+        setUserSearchResults([]);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    },
+    [dispatch],
+  );
+
+  const handleAddMember = useCallback(
+    async (userId, role) => {
+      try {
+        await dispatch(addBoardMember({ boardId, userId, role })).unwrap();
+        setUserSearchResults([]);
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
+
+  const handleRemoveMember = useCallback(
+    async (userId) => {
+      try {
+        await dispatch(removeBoardMember({ boardId, userId })).unwrap();
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
+
+  const handleUpdateMemberRole = useCallback(
+    async (userId, role) => {
+      try {
+        await dispatch(updateBoardMember({ boardId, userId, role })).unwrap();
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
 
   const isCardModalOpen = cardModal.mode !== null;
   const activeCard = activeCardId ? cardsState.entities[activeCardId] : null;
@@ -625,7 +702,10 @@ const BoardViewPage = () => {
 
   // Permission helpers based on role hierarchy: owner > admin > member > viewer
   const canEdit = ['owner', 'admin', 'member'].includes(membershipRole);
+  const canManage = ['owner', 'admin'].includes(membershipRole);
   const isViewer = membershipRole === 'viewer';
+
+  const currentUserId = authState.user?.id;
 
   const cardModalTitle = 'Add card';
   const cardModalDescription = 'Enter a title to create a new card in this list.';
@@ -662,6 +742,28 @@ const BoardViewPage = () => {
             {board.description && <p className="text-sm text-slate-100">{board.description}</p>}
           </div>
           <div className="flex flex-wrap gap-3">
+            {canManage && (
+              <button
+                type="button"
+                onClick={openShareModal}
+                className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+              >
+                <svg
+                  className="mr-2 h-4 w-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
+                  />
+                </svg>
+                Share
+              </button>
+            )}
             {canEdit && (
               <button
                 type="button"
@@ -1069,6 +1171,25 @@ const BoardViewPage = () => {
           isDeleting={isDeletingActiveCard}
           deleteError={activeCardDeleteError}
           readOnly={!canEdit}
+        />
+      )}
+
+      {isShareModalOpen && board && currentUserId && (
+        <ShareBoardModal
+          board={board}
+          members={boardsState.members}
+          currentUserId={currentUserId}
+          onClose={closeShareModal}
+          onSearchUsers={handleSearchUsers}
+          searchResults={userSearchResults}
+          isSearching={isSearchingUsers}
+          onAddMember={handleAddMember}
+          isAddingMember={boardsState.addMemberStatus === 'loading'}
+          addMemberError={boardsState.addMemberError}
+          onRemoveMember={handleRemoveMember}
+          isRemovingMember={boardsState.removeMemberStatus === 'loading'}
+          onUpdateMemberRole={handleUpdateMemberRole}
+          isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
         />
       )}
     </section>

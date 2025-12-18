@@ -113,3 +113,38 @@ export const changePassword = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const searchUsers = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || typeof q !== 'string' || q.trim().length < 2) {
+      return res.status(400).json({ message: 'Search query must be at least 2 characters' });
+    }
+
+    const query = q.trim();
+    const currentUserId = req.user._id;
+
+    // Search by username or email (case-insensitive)
+    const users = await User.find({
+      _id: { $ne: currentUserId },
+      $or: [
+        { username: { $regex: query, $options: 'i' } },
+        { email: { $regex: query, $options: 'i' } },
+      ],
+    })
+      .select('_id username email avatarUrl')
+      .limit(10);
+
+    const results = users.map((user) => ({
+      id: user._id.toString(),
+      username: user.username,
+      email: user.email,
+      avatarUrl: user.avatarUrl,
+    }));
+
+    return res.status(200).json({ users: results });
+  } catch (error) {
+    return next(error);
+  }
+};
