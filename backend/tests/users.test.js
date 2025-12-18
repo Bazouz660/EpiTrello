@@ -90,3 +90,60 @@ describe('Users API', () => {
     expect(response.body.message).toMatch(/incorrect/i);
   });
 });
+
+describe('User Search API', () => {
+  it('searches users by username', async () => {
+    const { token } = await registerAndLogin({ username: 'searchUser', email: 'search@example.com' });
+    await registerAndLogin({ username: 'johnsmith', email: 'john@example.com' });
+    await registerAndLogin({ username: 'janedoe', email: 'jane@example.com' });
+
+    const response = await request(app)
+      .get('/api/users/search?q=john')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.users).toHaveLength(1);
+    expect(response.body.users[0].username).toBe('johnsmith');
+  });
+
+  it('searches users by email', async () => {
+    const { token } = await registerAndLogin({ username: 'emailSearch', email: 'esearch@example.com' });
+    await registerAndLogin({ username: 'target', email: 'findme@test.com' });
+
+    const response = await request(app)
+      .get('/api/users/search?q=findme')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.users).toHaveLength(1);
+    expect(response.body.users[0].email).toBe('findme@test.com');
+  });
+
+  it('excludes the current user from search results', async () => {
+    const { token } = await registerAndLogin({ username: 'excludeSelf', email: 'exclude@example.com' });
+
+    const response = await request(app)
+      .get('/api/users/search?q=exclude')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.users).toHaveLength(0);
+  });
+
+  it('requires at least 2 characters in search query', async () => {
+    const { token } = await registerAndLogin({ username: 'minQuery', email: 'min@example.com' });
+
+    const response = await request(app)
+      .get('/api/users/search?q=a')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toMatch(/at least 2 characters/i);
+  });
+
+  it('requires authentication', async () => {
+    const response = await request(app).get('/api/users/search?q=test');
+
+    expect(response.status).toBe(401);
+  });
+});

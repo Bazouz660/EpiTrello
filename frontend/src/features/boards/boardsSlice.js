@@ -26,6 +26,16 @@ const buildInitialState = () => ({
   selectedBoard: null,
   selectedStatus: 'idle',
   selectedError: null,
+  // Member management state
+  membersStatus: 'idle',
+  membersError: null,
+  members: [],
+  addMemberStatus: 'idle',
+  addMemberError: null,
+  removeMemberStatus: 'idle',
+  removeMemberError: null,
+  updateMemberStatus: 'idle',
+  updateMemberError: null,
 });
 
 const initialState = buildInitialState();
@@ -91,11 +101,76 @@ export const fetchBoardById = createAsyncThunk(
   },
 );
 
+export const fetchBoardMembers = createAsyncThunk(
+  'boards/fetchMembers',
+  async ({ boardId }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.get(`/boards/${boardId}/members`);
+      return data.members ?? [];
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const addBoardMember = createAsyncThunk(
+  'boards/addMember',
+  async ({ boardId, userId, role = 'member' }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.post(`/boards/${boardId}/members`, { userId, role });
+      return { board: data.board, members: data.members };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const updateBoardMember = createAsyncThunk(
+  'boards/updateMember',
+  async ({ boardId, userId, role }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.patch(`/boards/${boardId}/members/${userId}`, { role });
+      return { board: data.board, members: data.members };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const removeBoardMember = createAsyncThunk(
+  'boards/removeMember',
+  async ({ boardId, userId }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.delete(`/boards/${boardId}/members/${userId}`);
+      return { board: data.board, members: data.members };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const searchUsers = createAsyncThunk(
+  'boards/searchUsers',
+  async ({ query }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.get(`/users/search?q=${encodeURIComponent(query)}`);
+      return data.users ?? [];
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
 const boardsSlice = createSlice({
   name: 'boards',
   initialState,
   reducers: {
     clearBoardsState: () => buildInitialState(),
+    clearMemberErrors: (state) => {
+      state.addMemberError = null;
+      state.removeMemberError = null;
+      state.updateMemberError = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -175,12 +250,85 @@ const boardsSlice = createSlice({
         state.selectedError =
           action.payload ?? action.error?.message ?? 'Failed to load board details';
       })
+      // Member management
+      .addCase(fetchBoardMembers.pending, (state) => {
+        state.membersStatus = 'loading';
+        state.membersError = null;
+      })
+      .addCase(fetchBoardMembers.fulfilled, (state, action) => {
+        state.membersStatus = 'succeeded';
+        state.members = action.payload;
+      })
+      .addCase(fetchBoardMembers.rejected, (state, action) => {
+        state.membersStatus = 'failed';
+        state.membersError = action.payload ?? action.error?.message ?? 'Failed to load members';
+      })
+      .addCase(addBoardMember.pending, (state) => {
+        state.addMemberStatus = 'loading';
+        state.addMemberError = null;
+      })
+      .addCase(addBoardMember.fulfilled, (state, action) => {
+        state.addMemberStatus = 'succeeded';
+        if (state.selectedBoard?.id === action.payload.board.id) {
+          state.selectedBoard = action.payload.board;
+        }
+        state.items = state.items.map((board) =>
+          board.id === action.payload.board.id ? action.payload.board : board,
+        );
+        // Update members list with populated data
+        state.members = action.payload.members;
+      })
+      .addCase(addBoardMember.rejected, (state, action) => {
+        state.addMemberStatus = 'failed';
+        state.addMemberError = action.payload ?? action.error?.message ?? 'Failed to add member';
+      })
+      .addCase(updateBoardMember.pending, (state) => {
+        state.updateMemberStatus = 'loading';
+        state.updateMemberError = null;
+      })
+      .addCase(updateBoardMember.fulfilled, (state, action) => {
+        state.updateMemberStatus = 'succeeded';
+        if (state.selectedBoard?.id === action.payload.board.id) {
+          state.selectedBoard = action.payload.board;
+        }
+        state.items = state.items.map((board) =>
+          board.id === action.payload.board.id ? action.payload.board : board,
+        );
+        // Update members list with populated data
+        state.members = action.payload.members;
+      })
+      .addCase(updateBoardMember.rejected, (state, action) => {
+        state.updateMemberStatus = 'failed';
+        state.updateMemberError =
+          action.payload ?? action.error?.message ?? 'Failed to update member';
+      })
+      .addCase(removeBoardMember.pending, (state) => {
+        state.removeMemberStatus = 'loading';
+        state.removeMemberError = null;
+      })
+      .addCase(removeBoardMember.fulfilled, (state, action) => {
+        state.removeMemberStatus = 'succeeded';
+        if (state.selectedBoard?.id === action.payload.board.id) {
+          state.selectedBoard = action.payload.board;
+        }
+        state.items = state.items.map((board) =>
+          board.id === action.payload.board.id ? action.payload.board : board,
+        );
+        // Update members list with populated data
+        state.members = action.payload.members;
+      })
+      .addCase(removeBoardMember.rejected, (state, action) => {
+        state.removeMemberStatus = 'failed';
+        state.removeMemberError =
+          action.payload ?? action.error?.message ?? 'Failed to remove member';
+      })
       .addCase(clearSession, () => buildInitialState());
+
   },
 });
 
 export const boardsReducer = boardsSlice.reducer;
-export const { clearBoardsState } = boardsSlice.actions;
+export const { clearBoardsState, clearMemberErrors } = boardsSlice.actions;
 export const selectBoards = (state) => state.boards;
 export const createBoardsInitialState = () => buildInitialState();
 

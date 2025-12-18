@@ -36,7 +36,16 @@ vi.mock('../hooks/index.js', () => ({
 
 vi.mock('../features/boards/boardsSlice.js', () => ({
   fetchBoardById: mockFetchBoardById,
+  fetchBoardMembers: vi.fn((payload) => ({ type: 'boards/fetchMembers', meta: payload })),
+  addBoardMember: vi.fn((payload) => ({ type: 'boards/addMember', payload })),
+  removeBoardMember: vi.fn((payload) => ({ type: 'boards/removeMember', payload })),
+  updateBoardMember: vi.fn((payload) => ({ type: 'boards/updateMember', payload })),
+  searchUsers: vi.fn((payload) => ({ type: 'boards/searchUsers', payload })),
   selectBoards: (state) => state.boards,
+}));
+
+vi.mock('../features/auth/authSlice.js', () => ({
+  selectAuth: (state) => state.auth,
 }));
 
 vi.mock('../features/lists/listsSlice.js', () => ({
@@ -71,6 +80,12 @@ const renderWithRouter = () =>
   );
 
 const buildState = () => ({
+  auth: {
+    user: { id: 'owner-1', username: 'testuser', email: 'test@example.com' },
+    token: 'test-token',
+    status: 'succeeded',
+    error: null,
+  },
   boards: {
     selectedBoard: {
       id: 'board-1',
@@ -83,6 +98,18 @@ const buildState = () => ({
     },
     selectedStatus: 'succeeded',
     selectedError: null,
+    members: [
+      { id: 'owner-1', username: 'testuser', email: 'test@example.com', role: 'owner' },
+      { id: 'mem-1', username: 'member1', email: 'member1@example.com', role: 'member' },
+    ],
+    membersStatus: 'succeeded',
+    membersError: null,
+    addMemberStatus: 'idle',
+    addMemberError: null,
+    removeMemberStatus: 'idle',
+    removeMemberError: null,
+    updateMemberStatus: 'idle',
+    updateMemberError: null,
   },
   lists: {
     entities: {

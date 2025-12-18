@@ -64,6 +64,32 @@ const toResponse = (board, userId) => ({
   membershipRole: resolveMembershipRole(board, userId),
 });
 
+// Helper to get populated members list
+const getPopulatedMembers = async (boardId) => {
+  const board = await Board.findById(boardId)
+    .populate('members.user', '_id username email avatarUrl')
+    .populate('owner', '_id username email avatarUrl');
+  
+  if (!board) return [];
+  
+  return [
+    {
+      id: board.owner._id.toString(),
+      username: board.owner.username,
+      email: board.owner.email,
+      avatarUrl: board.owner.avatarUrl,
+      role: 'owner',
+    },
+    ...board.members.map((m) => ({
+      id: m.user._id.toString(),
+      username: m.user.username,
+      email: m.user.email,
+      avatarUrl: m.user.avatarUrl,
+      role: m.role,
+    })),
+  ];
+};
+
 export const createBoard = async (req, res, next) => {
   try {
     const { title, description = '', background } = req.body;
@@ -148,6 +174,138 @@ export const deleteBoard = async (req, res, next) => {
     await board.deleteOne();
 
     return res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addBoardMember = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { userId, role = 'member' } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+
+    const validRoles = ['admin', 'member', 'viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be admin, member, or viewer' });
+    }
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner and admin can manage members
+    if (!canManage(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot add the owner as a member
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot add board owner as a member' });
+    }
+
+    // Check if user is already a member
+    const existingMember = board.members.find((m) => m.user.toString() === userId);
+    if (existingMember) {
+      return res.status(400).json({ message: 'User is already a member of this board' });
+    }
+
+    board.members.push({ user: userId, role });
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateBoardMember = async (req, res, next) => {
+  try {
+    const { id, userId } = req.params;
+    const { role } = req.body;
+
+    const validRoles = ['admin', 'member', 'viewer'];
+    if (!role || !validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be admin, member, or viewer' });
+    }
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner and admin can manage members
+    if (!canManage(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot update owner's role
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot change owner role' });
+    }
+
+    const memberIndex = board.members.findIndex((m) => m.user.toString() === userId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    board.members[memberIndex].role = role;
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeBoardMember = async (req, res, next) => {
+  try {
+    const { id, userId } = req.params;
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner and admin can remove members
+    if (!canManage(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot remove the owner
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot remove board owner' });
+    }
+
+    const memberIndex = board.members.findIndex((m) => m.user.toString() === userId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    board.members.splice(memberIndex, 1);
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBoardMembers = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Any role can view members
+    if (!canView(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const members = await getPopulatedMembers(id);
+    return res.status(200).json({ members });
   } catch (error) {
     next(error);
   }
