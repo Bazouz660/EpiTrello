@@ -20,7 +20,7 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
-import ShareBoardModal from '../components/boards/ShareBoardModal.jsx';
+import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
 import { DroppableListArea, SortableCard, SortableList } from '../components/dnd/index.js';
@@ -95,10 +95,12 @@ const BoardViewPage = () => {
   const [cardModalError, setCardModalError] = useState(null);
   const [activeCardId, setActiveCardId] = useState(null);
   const [activeDragItem, setActiveDragItem] = useState(null);
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const listTitleInputRef = useRef(null);
+  // Track card order during drag to sync with dnd-kit's visual state
+  const dragCardOrderRef = useRef(null);
 
   // Custom collision detection that handles lists and cards appropriately
   const collisionDetectionStrategy = useCallback(
@@ -171,15 +173,15 @@ const BoardViewPage = () => {
     setActiveCardId(null);
   };
 
-  const openShareModal = useCallback(() => {
-    setIsShareModalOpen(true);
+  const openMembersPanel = useCallback(() => {
+    setIsMembersPanelOpen(true);
     setUserSearchResults([]);
     dispatch(clearMemberErrors());
     dispatch(fetchBoardMembers({ boardId }));
   }, [dispatch, boardId]);
 
-  const closeShareModal = useCallback(() => {
-    setIsShareModalOpen(false);
+  const closeMembersPanel = useCallback(() => {
+    setIsMembersPanelOpen(false);
     setUserSearchResults([]);
     dispatch(clearMemberErrors());
   }, [dispatch]);
@@ -292,6 +294,8 @@ const BoardViewPage = () => {
     } else if (type === 'card') {
       const card = cardsState.entities[active.id];
       setActiveDragItem({ type: 'card', data: card, originalListId: card.list });
+      // Initialize drag order tracking with current card positions for all lists
+      dragCardOrderRef.current = { ...cardsState.idsByList };
     }
   };
 
@@ -308,7 +312,7 @@ const BoardViewPage = () => {
 
     // Get the original source list from activeDragItem (stable reference)
     const originalSourceListId = activeDragItem?.originalListId;
-    if (!originalSourceListId) return;
+    if (!originalSourceListId || !dragCardOrderRef.current) return;
 
     // Determine the target list
     let overListId;
@@ -322,10 +326,10 @@ const BoardViewPage = () => {
 
     if (!overListId) return;
 
-    // Find which list currently contains the card
+    // Find which list currently contains the card in our tracked order
     let currentListId = null;
-    for (const listId of Object.keys(cardsState.idsByList)) {
-      if (cardsState.idsByList[listId]?.includes(activeId)) {
+    for (const listId of Object.keys(dragCardOrderRef.current)) {
+      if (dragCardOrderRef.current[listId]?.includes(activeId)) {
         currentListId = listId;
         break;
       }
@@ -333,32 +337,77 @@ const BoardViewPage = () => {
 
     if (!currentListId) return;
 
-    // Get current card arrays
-    const currentListCards = cardsState.idsByList[currentListId] ?? [];
-    const targetCards = cardsState.idsByList[overListId] ?? [];
+    // Get current card arrays from our tracked order
+    const currentListCards = [...(dragCardOrderRef.current[currentListId] ?? [])];
+    const targetCards = [...(dragCardOrderRef.current[overListId] ?? [])];
 
-    // Same list reordering is handled by dnd-kit visually and persisted in handleDragEnd
     if (currentListId === overListId) {
+      // Same list reordering
+      if (overType !== 'card' || overId === activeId) return;
+
+      const oldIndex = currentListCards.indexOf(activeId);
+      const overIndex = currentListCards.indexOf(overId);
+
+      if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) return;
+
+      // Use arrayMove to reorder
+      const newCardIds = arrayMove(currentListCards, oldIndex, overIndex);
+
+      // Check if this would change anything
+      if (newCardIds.join(',') === currentListCards.join(',')) return;
+
+      // Update our tracked order
+      dragCardOrderRef.current = {
+        ...dragCardOrderRef.current,
+        [currentListId]: newCardIds,
+      };
+
+      // Dispatch optimistic update
+      dispatch(
+        optimisticMoveCard({
+          cardId: activeId,
+          sourceListId: currentListId,
+          targetListId: currentListId,
+          sourceListCardIds: newCardIds,
+          targetListCardIds: newCardIds,
+        }),
+      );
       return;
     }
 
     // Cross-list move: Move card from current list to target list
     const newSourceCards = currentListCards.filter((id) => id !== activeId);
 
-    // Calculate position in target list
-    let insertIndex = targetCards.length;
-    if (overType === 'card') {
-      const overIndex = targetCards.indexOf(overId);
+    // Calculate position in target list, excluding the active card if it's already there
+    const targetCardsWithoutActive = targetCards.filter((id) => id !== activeId);
+    let insertIndex = targetCardsWithoutActive.length;
+    if (overType === 'card' && overId !== activeId) {
+      const overIndex = targetCardsWithoutActive.indexOf(overId);
       if (overIndex !== -1) {
         insertIndex = overIndex;
       }
     }
 
     const newTargetCards = [
-      ...targetCards.slice(0, insertIndex),
+      ...targetCardsWithoutActive.slice(0, insertIndex),
       activeId,
-      ...targetCards.slice(insertIndex),
+      ...targetCardsWithoutActive.slice(insertIndex),
     ];
+
+    // Check if this would change anything
+    if (
+      newSourceCards.join(',') === currentListCards.join(',') &&
+      newTargetCards.join(',') === targetCards.join(',')
+    ) {
+      return;
+    }
+
+    // Update our tracked order
+    dragCardOrderRef.current = {
+      ...dragCardOrderRef.current,
+      [currentListId]: newSourceCards,
+      [overListId]: newTargetCards,
+    };
 
     dispatch(
       optimisticMoveCard({
@@ -377,6 +426,7 @@ const BoardViewPage = () => {
     const originalSourceListId =
       activeDragItem?.type === 'card' ? activeDragItem.originalListId : null;
     setActiveDragItem(null);
+    dragCardOrderRef.current = null;
 
     if (!over) return;
 
@@ -398,22 +448,8 @@ const BoardViewPage = () => {
       }
     } else if (activeType === 'card') {
       const activeId = active.id;
-      const overId = over.id;
-      const overType = over.data.current?.type;
 
-      // Determine the target list
-      let targetListId;
-      if (overType === 'card') {
-        targetListId = over.data.current?.listId;
-      } else if (overType === 'list-container') {
-        targetListId = over.data.current?.listId;
-      } else if (overType === 'list') {
-        targetListId = over.id;
-      }
-
-      if (!targetListId) return;
-
-      // Find which list currently contains the card (may have changed during drag)
+      // Find which list currently contains the card (state was updated in handleDragOver)
       let currentListId = null;
       for (const listId of Object.keys(cardsState.idsByList)) {
         if (cardsState.idsByList[listId]?.includes(activeId)) {
@@ -424,64 +460,26 @@ const BoardViewPage = () => {
 
       if (!currentListId) return;
 
-      const wasCrossListMove = originalSourceListId && originalSourceListId !== currentListId;
-
-      // Get current state
-      const sourceCards = cardsState.idsByList[originalSourceListId] ?? [];
       const currentListCards = cardsState.idsByList[currentListId] ?? [];
+      const position = currentListCards.indexOf(activeId);
 
-      if (wasCrossListMove) {
-        // Cross-list move - optimistic update already happened in handleDragOver
-        // Just persist current state to server
-        const position = currentListCards.indexOf(activeId);
+      if (position === -1) return;
 
-        if (position === -1) return; // Card wasn't moved, shouldn't happen
+      // Determine source list cards for the API call
+      const sourceCards = originalSourceListId
+        ? (cardsState.idsByList[originalSourceListId] ?? [])
+        : currentListCards;
 
-        dispatch(
-          moveCard({
-            cardId: activeId,
-            targetListId: currentListId,
-            position,
-            sourceListCardIds: sourceCards,
-            targetListCardIds: currentListCards,
-          }),
-        );
-      } else {
-        // Same list reordering - need to calculate new position and do optimistic update
-        const oldIndex = currentListCards.indexOf(activeId);
-        let newIndex = currentListCards.indexOf(overId);
-
-        if (overType === 'list-container' || overType === 'list') {
-          newIndex = currentListCards.length - 1;
-        }
-
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          const newCardIds = arrayMove(currentListCards, oldIndex, newIndex);
-
-          // Optimistic update
-          dispatch(
-            optimisticMoveCard({
-              cardId: activeId,
-              sourceListId: currentListId,
-              targetListId: currentListId,
-              sourceListCardIds: newCardIds,
-              targetListCardIds: newCardIds,
-            }),
-          );
-
-          // Persist to server
-          const position = newCardIds.indexOf(activeId);
-          dispatch(
-            moveCard({
-              cardId: activeId,
-              targetListId: currentListId,
-              position,
-              sourceListCardIds: newCardIds,
-              targetListCardIds: newCardIds,
-            }),
-          );
-        }
-      }
+      // Persist current state to server
+      dispatch(
+        moveCard({
+          cardId: activeId,
+          targetListId: currentListId,
+          position,
+          sourceListCardIds: sourceCards,
+          targetListCardIds: currentListCards,
+        }),
+      );
     }
   };
 
@@ -742,28 +740,26 @@ const BoardViewPage = () => {
             {board.description && <p className="text-sm text-slate-100">{board.description}</p>}
           </div>
           <div className="flex flex-wrap gap-3">
-            {canManage && (
-              <button
-                type="button"
-                onClick={openShareModal}
-                className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+            <button
+              type="button"
+              onClick={openMembersPanel}
+              className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+            >
+              <svg
+                className="mr-2 h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
               >
-                <svg
-                  className="mr-2 h-4 w-4"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"
-                  />
-                </svg>
-                Share
-              </button>
-            )}
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+                />
+              </svg>
+              Members
+            </button>
             {canEdit && (
               <button
                 type="button"
@@ -825,7 +821,7 @@ const BoardViewPage = () => {
                     listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
 
                   return (
-                    <SortableList key={list.id} id={list.id}>
+                    <SortableList key={list.id} id={list.id} activeDragType={activeDragItem?.type}>
                       {({
                         attributes,
                         listeners,
@@ -1174,24 +1170,26 @@ const BoardViewPage = () => {
         />
       )}
 
-      {isShareModalOpen && board && currentUserId && (
-        <ShareBoardModal
-          board={board}
-          members={boardsState.members}
-          currentUserId={currentUserId}
-          onClose={closeShareModal}
-          onSearchUsers={handleSearchUsers}
-          searchResults={userSearchResults}
-          isSearching={isSearchingUsers}
-          onAddMember={handleAddMember}
-          isAddingMember={boardsState.addMemberStatus === 'loading'}
-          addMemberError={boardsState.addMemberError}
-          onRemoveMember={handleRemoveMember}
-          isRemovingMember={boardsState.removeMemberStatus === 'loading'}
-          onUpdateMemberRole={handleUpdateMemberRole}
-          isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
-        />
-      )}
+      <BoardMembersPanel
+        isOpen={isMembersPanelOpen}
+        onClose={closeMembersPanel}
+        board={board}
+        members={boardsState.members}
+        currentUserId={currentUserId}
+        isLoading={boardsState.membersStatus === 'loading'}
+        error={boardsState.membersError}
+        canManage={canManage}
+        onSearchUsers={handleSearchUsers}
+        searchResults={userSearchResults}
+        isSearching={isSearchingUsers}
+        onAddMember={handleAddMember}
+        isAddingMember={boardsState.addMemberStatus === 'loading'}
+        addMemberError={boardsState.addMemberError}
+        onRemoveMember={handleRemoveMember}
+        isRemovingMember={boardsState.removeMemberStatus === 'loading'}
+        onUpdateMemberRole={handleUpdateMemberRole}
+        isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
+      />
     </section>
   );
 };
