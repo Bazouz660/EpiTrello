@@ -485,6 +485,7 @@ const BoardViewPage = () => {
 
   useEffect(() => {
     dispatch(fetchBoardById({ id: boardId }));
+    dispatch(fetchBoardMembers({ boardId }));
   }, [dispatch, boardId]);
 
   useEffect(() => {
@@ -938,6 +939,7 @@ const BoardViewPage = () => {
                                   <CardListItem
                                     card={card}
                                     onOpenDetail={() => handleCardDetailOpen(card.id)}
+                                    boardMembers={boardsState.members}
                                   />
                                 </SortableCard>
                               ))}
