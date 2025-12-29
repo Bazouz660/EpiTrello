@@ -1,6 +1,7 @@
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+import { broadcastToBoard } from '../socket/index.js';
 
 import { canView, canEdit } from './boardsController.js';
 
@@ -31,6 +32,12 @@ export const createList = async (req, res, next) => {
 
     const list = new List({ title, board: boardId, position: pos });
     await list.save();
+
+    // Broadcast to other board members
+    broadcastToBoard(boardId, 'list:created', {
+      list: toResponse(list),
+      userId: req.user._id.toString(),
+    });
 
     return res.status(201).json({ list: toResponse(list) });
   } catch (error) {
@@ -91,6 +98,12 @@ export const updateList = async (req, res, next) => {
 
     await list.save();
 
+    // Broadcast to other board members
+    broadcastToBoard(list.board.toString(), 'list:updated', {
+      list: toResponse(list),
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ list: toResponse(list) });
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ message: 'Position conflict' });
@@ -108,9 +121,19 @@ export const deleteList = async (req, res, next) => {
     // Only members or higher can delete lists (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
+    const boardId = list.board.toString();
+    const listId = list._id.toString();
+
     // remove cards in this list
     await Card.deleteMany({ list: list._id });
     await list.deleteOne();
+
+    // Broadcast to other board members
+    broadcastToBoard(boardId, 'list:deleted', {
+      listId,
+      boardId,
+      userId: req.user._id.toString(),
+    });
 
     return res.status(204).send();
   } catch (error) {
@@ -152,6 +175,14 @@ export const reorderLists = async (req, res, next) => {
 
     // Fetch updated lists
     const lists = await List.find({ board: boardId }).sort({ position: 1 });
+
+    // Broadcast to other board members
+    broadcastToBoard(boardId, 'lists:reordered', {
+      boardId,
+      lists: lists.map(toResponse),
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ lists: lists.map(toResponse) });
   } catch (error) {
     next(error);

@@ -5,6 +5,7 @@ import { Server } from 'socket.io';
 import app from './app.js';
 import { connectToDatabase } from './config/db.js';
 import { env } from './config/env.js';
+import { initializeSocket } from './socket/index.js';
 import { logger } from './utils/logger.js';
 
 const server = http.createServer(app);
@@ -16,13 +17,8 @@ const io = new Server(server, {
   },
 });
 
-io.on('connection', (socket) => {
-  logger.debug(`Socket connected: ${socket.id}`);
-
-  socket.on('disconnect', () => {
-    logger.debug(`Socket disconnected: ${socket.id}`);
-  });
-});
+// Initialize socket with authentication and board room handlers
+initializeSocket(io);
 
 export const startServer = async () => {
   await connectToDatabase();

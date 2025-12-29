@@ -136,6 +136,84 @@ const cardsSlice = createSlice({
         state.entities[cardId].list = targetListId;
       }
     },
+    // Real-time sync actions
+    cardCreatedFromSocket: (state, action) => {
+      const { card, listId } = action.payload;
+      state.entities[card.id] = card;
+      if (!state.idsByList[listId]) {
+        state.idsByList[listId] = [];
+      }
+      if (!state.idsByList[listId].includes(card.id)) {
+        state.idsByList[listId] = sortIdsByPosition(
+          [...state.idsByList[listId], card.id],
+          state.entities,
+        );
+      }
+    },
+    cardUpdatedFromSocket: (state, action) => {
+      const { card } = action.payload;
+      const previousListId = state.entities[card.id]?.list;
+      state.entities[card.id] = card;
+
+      // Handle list change
+      if (previousListId && previousListId !== card.list) {
+        // Remove from old list
+        if (state.idsByList[previousListId]) {
+          state.idsByList[previousListId] = state.idsByList[previousListId].filter(
+            (id) => id !== card.id,
+          );
+        }
+        // Add to new list
+        if (!state.idsByList[card.list]) {
+          state.idsByList[card.list] = [];
+        }
+        if (!state.idsByList[card.list].includes(card.id)) {
+          state.idsByList[card.list].push(card.id);
+        }
+      }
+
+      // Sort the current list
+      if (state.idsByList[card.list]) {
+        state.idsByList[card.list] = sortIdsByPosition(state.idsByList[card.list], state.entities);
+      }
+    },
+    cardDeletedFromSocket: (state, action) => {
+      const { cardId, listId } = action.payload;
+      delete state.entities[cardId];
+      if (listId && state.idsByList[listId]) {
+        state.idsByList[listId] = state.idsByList[listId].filter((id) => id !== cardId);
+      }
+    },
+    cardMovedFromSocket: (state, action) => {
+      const { card, sourceListId, targetListId, sourceListCardIds, targetListCardIds } =
+        action.payload;
+
+      // Update the card entity
+      state.entities[card.id] = card;
+
+      // Update source list if provided
+      if (sourceListCardIds && sourceListId) {
+        state.idsByList[sourceListId] = sourceListCardIds;
+        sourceListCardIds.forEach((id, index) => {
+          if (state.entities[id]) {
+            state.entities[id].position = index;
+          }
+        });
+      }
+
+      // Update target list if provided
+      if (targetListCardIds && targetListId) {
+        state.idsByList[targetListId] = targetListCardIds;
+        targetListCardIds.forEach((id, index) => {
+          if (state.entities[id]) {
+            state.entities[id].position = index;
+            if (targetListId !== sourceListId) {
+              state.entities[id].list = targetListId;
+            }
+          }
+        });
+      }
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -249,7 +327,14 @@ const cardsSlice = createSlice({
 });
 
 export const cardsReducer = cardsSlice.reducer;
-export const { clearCardsState, optimisticMoveCard } = cardsSlice.actions;
+export const {
+  clearCardsState,
+  optimisticMoveCard,
+  cardCreatedFromSocket,
+  cardUpdatedFromSocket,
+  cardDeletedFromSocket,
+  cardMovedFromSocket,
+} = cardsSlice.actions;
 export const selectCards = (state) => state.cards;
 export const createCardsInitialState = () => buildInitialState();
 
