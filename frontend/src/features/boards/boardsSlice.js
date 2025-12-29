@@ -171,6 +171,30 @@ const boardsSlice = createSlice({
       state.removeMemberError = null;
       state.updateMemberError = null;
     },
+    // Real-time sync actions
+    boardUpdatedFromSocket: (state, action) => {
+      const { board } = action.payload;
+      // Update in items list
+      const itemIndex = state.items.findIndex((b) => b.id === board.id);
+      if (itemIndex !== -1) {
+        state.items[itemIndex] = board;
+      }
+      // Update selected board if it's the current one
+      if (state.selectedBoard?.id === board.id) {
+        state.selectedBoard = board;
+      }
+    },
+    boardDeletedFromSocket: (state, action) => {
+      const { boardId } = action.payload;
+      state.items = state.items.filter((b) => b.id !== boardId);
+      if (state.selectedBoard?.id === boardId) {
+        state.selectedBoard = null;
+      }
+    },
+    boardMembersUpdatedFromSocket: (state, action) => {
+      const { members } = action.payload;
+      state.members = members;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -323,12 +347,17 @@ const boardsSlice = createSlice({
           action.payload ?? action.error?.message ?? 'Failed to remove member';
       })
       .addCase(clearSession, () => buildInitialState());
-
   },
 });
 
 export const boardsReducer = boardsSlice.reducer;
-export const { clearBoardsState, clearMemberErrors } = boardsSlice.actions;
+export const {
+  clearBoardsState,
+  clearMemberErrors,
+  boardUpdatedFromSocket,
+  boardDeletedFromSocket,
+  boardMembersUpdatedFromSocket,
+} = boardsSlice.actions;
 export const selectBoards = (state) => state.boards;
 export const createBoardsInitialState = () => buildInitialState();
 

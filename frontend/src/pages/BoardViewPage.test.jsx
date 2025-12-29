@@ -32,6 +32,13 @@ let mockState = {};
 vi.mock('../hooks/index.js', () => ({
   useAppDispatch: () => mockDispatch,
   useAppSelector: (selector) => selector(mockState),
+  useBoardSocket: () => ({
+    status: 'connected',
+    isConnected: true,
+    error: null,
+    onlineUsers: [],
+    reconnectAttempts: 0,
+  }),
 }));
 
 vi.mock('../features/boards/boardsSlice.js', () => ({

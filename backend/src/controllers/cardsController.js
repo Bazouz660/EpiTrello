@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+import { broadcastToBoard } from '../socket/index.js';
 
 import { canView, canEdit } from './boardsController.js';
 
@@ -84,6 +85,13 @@ export const createCard = async (req, res, next) => {
       activity: [buildActivityEntry('Card created', req.user._id)],
     });
     await card.save();
+
+    // Broadcast to other board members
+    broadcastToBoard(board._id.toString(), 'card:created', {
+      card: toResponse(card),
+      listId,
+      userId: req.user._id.toString(),
+    });
 
     return res.status(201).json({ card: toResponse(card) });
   } catch (error) {
@@ -212,6 +220,13 @@ export const updateCard = async (req, res, next) => {
     });
 
     await card.save();
+
+    // Broadcast to other board members
+    broadcastToBoard(board._id.toString(), 'card:updated', {
+      card: toResponse(card),
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ card: toResponse(card) });
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ message: 'Position conflict' });
@@ -232,7 +247,19 @@ export const deleteCard = async (req, res, next) => {
     // Only members or higher can delete cards (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
+    const cardId = card._id.toString();
+    const listId = card.list.toString();
+    const boardId = board._id.toString();
+
     await card.deleteOne();
+
+    // Broadcast to other board members
+    broadcastToBoard(boardId, 'card:deleted', {
+      cardId,
+      listId,
+      userId: req.user._id.toString(),
+    });
+
     return res.status(204).send();
   } catch (error) {
     next(error);
@@ -362,6 +389,16 @@ export const moveCard = async (req, res, next) => {
       { $push: { activity: activityEntry } },
       { new: true },
     );
+
+    // Broadcast to other board members
+    broadcastToBoard(sourceBoard._id.toString(), 'card:moved', {
+      card: toResponse(updatedCard),
+      sourceListId: originalListId,
+      targetListId,
+      sourceListCardIds: sourceListCardIds || [],
+      targetListCardIds: targetListCardIds || [],
+      userId: req.user._id.toString(),
+    });
 
     return res.status(200).json({ card: toResponse(updatedCard) });
   } catch (error) {

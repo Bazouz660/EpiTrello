@@ -1,4 +1,5 @@
 import { Board } from '../models/Board.js';
+import { broadcastToBoard } from '../socket/index.js';
 
 const defaultBackground = { type: 'color', value: '#0f172a', thumbnail: '' };
 
@@ -155,6 +156,12 @@ export const updateBoard = async (req, res, next) => {
 
     await board.save();
 
+    // Broadcast to other board members
+    broadcastToBoard(id, 'board:updated', {
+      board: toResponse(board, req.user._id),
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ board: toResponse(board, req.user._id) });
   } catch (error) {
     next(error);
@@ -170,6 +177,14 @@ export const deleteBoard = async (req, res, next) => {
     if (board.owner?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Forbidden' });
     }
+
+    const boardId = board._id.toString();
+
+    // Broadcast to board members before deletion
+    broadcastToBoard(boardId, 'board:deleted', {
+      boardId,
+      userId: req.user._id.toString(),
+    });
 
     await board.deleteOne();
 
@@ -216,6 +231,14 @@ export const addBoardMember = async (req, res, next) => {
     await board.save();
 
     const members = await getPopulatedMembers(board._id);
+
+    // Broadcast to other board members
+    broadcastToBoard(id, 'board:member-added', {
+      boardId: id,
+      members,
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ board: toResponse(board, req.user._id), members });
   } catch (error) {
     next(error);
@@ -254,6 +277,16 @@ export const updateBoardMember = async (req, res, next) => {
     await board.save();
 
     const members = await getPopulatedMembers(board._id);
+
+    // Broadcast to other board members
+    broadcastToBoard(id, 'board:member-updated', {
+      boardId: id,
+      members,
+      updatedUserId: userId,
+      role,
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ board: toResponse(board, req.user._id), members });
   } catch (error) {
     next(error);
@@ -286,6 +319,15 @@ export const removeBoardMember = async (req, res, next) => {
     await board.save();
 
     const members = await getPopulatedMembers(board._id);
+
+    // Broadcast to other board members
+    broadcastToBoard(id, 'board:member-removed', {
+      boardId: id,
+      members,
+      removedUserId: userId,
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ board: toResponse(board, req.user._id), members });
   } catch (error) {
     next(error);

@@ -23,6 +23,7 @@ import { Link, useParams } from 'react-router-dom';
 import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
+import ConnectionStatus from '../components/ConnectionStatus.jsx';
 import { DroppableListArea, SortableCard, SortableList } from '../components/dnd/index.js';
 import { selectAuth } from '../features/auth/authSlice.js';
 import {
@@ -53,7 +54,7 @@ import {
   selectLists,
   updateList,
 } from '../features/lists/listsSlice.js';
-import { useAppDispatch, useAppSelector } from '../hooks/index.js';
+import { useAppDispatch, useAppSelector, useBoardSocket } from '../hooks/index.js';
 
 const emptyListEditor = { id: null, title: '' };
 const emptyCardModalState = {
@@ -102,6 +103,8 @@ const BoardViewPage = () => {
   // Track card order during drag to sync with dnd-kit's visual state
   const dragCardOrderRef = useRef(null);
 
+  // Real-time WebSocket connection
+  const { status: socketStatus } = useBoardSocket(boardId, authState.token);
   // Custom collision detection that handles lists and cards appropriately
   const collisionDetectionStrategy = useCallback(
     (args) => {
@@ -734,9 +737,12 @@ const BoardViewPage = () => {
       <div className="relative z-10 flex h-full flex-col p-6 pb-0">
         <div className="mx-auto mb-6 flex w-full max-w-6xl flex-shrink-0 flex-wrap items-center justify-between gap-3 text-white">
           <div>
-            <p className="text-xs uppercase tracking-wide text-slate-200">
-              {isOwner ? 'Owned board' : `Shared · ${membershipRole}`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs uppercase tracking-wide text-slate-200">
+                {isOwner ? 'Owned board' : `Shared · ${membershipRole}`}
+              </p>
+              <ConnectionStatus status={socketStatus} size="xs" showLabel={false} />
+            </div>
             <h1 className="text-3xl font-semibold text-white">{board.title}</h1>
             {board.description && <p className="text-sm text-slate-100">{board.description}</p>}
           </div>
