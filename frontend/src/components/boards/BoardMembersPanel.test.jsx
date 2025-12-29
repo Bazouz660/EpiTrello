@@ -329,9 +329,10 @@ describe('BoardMembersPanel', () => {
       expect(roleDropdowns.length).toBe(3);
     });
 
-    it('shows Remove button for non-owner members', () => {
+    it('shows Remove button for non-owner members only when isOwner is true', () => {
       renderPanel({
         canManage: true,
+        isOwner: true,
         currentUserId: 'user1',
         onRemoveMember: mockOnRemoveMember,
       });
@@ -340,9 +341,22 @@ describe('BoardMembersPanel', () => {
       expect(removeButtons.length).toBe(3);
     });
 
+    it('does not show Remove button when canManage is true but isOwner is false', () => {
+      renderPanel({
+        canManage: true,
+        isOwner: false,
+        currentUserId: 'user2', // logged in as admin
+        onRemoveMember: mockOnRemoveMember,
+      });
+
+      const removeButtons = screen.queryAllByRole('button', { name: /remove/i });
+      expect(removeButtons.length).toBe(0);
+    });
+
     it('does not show manage controls for the owner', () => {
       renderPanel({
         canManage: true,
+        isOwner: true,
         currentUserId: 'user1',
       });
 
@@ -355,6 +369,7 @@ describe('BoardMembersPanel', () => {
       const user = userEvent.setup();
       renderPanel({
         canManage: true,
+        isOwner: true,
         currentUserId: 'user1',
         onUpdateMemberRole: mockOnUpdateMemberRole,
       });
@@ -372,6 +387,7 @@ describe('BoardMembersPanel', () => {
 
       renderPanel({
         canManage: true,
+        isOwner: true,
         currentUserId: 'user1',
         onRemoveMember: mockOnRemoveMember,
       });
@@ -391,6 +407,7 @@ describe('BoardMembersPanel', () => {
 
       renderPanel({
         canManage: true,
+        isOwner: true,
         currentUserId: 'user1',
         onRemoveMember: mockOnRemoveMember,
       });

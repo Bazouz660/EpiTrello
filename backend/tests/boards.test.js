@@ -448,6 +448,42 @@ describe('Board Member Management', () => {
     expect(response.body.board.members).toHaveLength(0);
   });
 
+  it('prevents admin from removing a member (owner only)', async () => {
+    const owner = await registerAndLogin();
+    const admin = await registerAndLogin({
+      username: 'adminuser',
+      email: 'adminuser@example.com',
+    });
+    const member = await registerAndLogin({
+      username: 'membertobe',
+      email: 'membertobe@example.com',
+    });
+
+    const creation = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Admin Remove Test Board' });
+
+    // Add admin to the board
+    await request(app)
+      .post(`/api/boards/${creation.body.board.id}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: admin.user.id, role: 'admin' });
+
+    // Add member to the board
+    await request(app)
+      .post(`/api/boards/${creation.body.board.id}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: member.user.id, role: 'member' });
+
+    // Admin tries to remove member - should be forbidden
+    const response = await request(app)
+      .delete(`/api/boards/${creation.body.board.id}/members/${member.user.id}`)
+      .set('Authorization', `Bearer ${admin.token}`);
+
+    expect(response.status).toBe(403);
+  });
+
   it('allows owner to update member role', async () => {
     const owner = await registerAndLogin();
     const member = await registerAndLogin({
