@@ -164,6 +164,7 @@ const MemberListItem = ({
   member,
   isCurrentUser,
   canManage,
+  canRemove,
   onRoleChange,
   onRemove,
   isUpdating,
@@ -171,6 +172,7 @@ const MemberListItem = ({
 }) => {
   const isMemberOwner = member.role === 'owner';
   const showManageControls = canManage && !isMemberOwner && !isCurrentUser;
+  const showRemoveButton = canRemove && !isMemberOwner && !isCurrentUser;
 
   const handleRemoveClick = () => {
     const confirmed = window.confirm(`Remove ${member.username} from this board?`);
@@ -194,30 +196,34 @@ const MemberListItem = ({
           <p className="truncate text-sm text-slate-500">{member.email}</p>
         </div>
       </div>
-      {showManageControls && (
+      {(showManageControls || showRemoveButton) && (
         <div className="mt-3 flex items-center gap-2 border-t border-slate-100 pt-3">
-          <select
-            value={member.role}
-            onChange={(e) => onRoleChange(member.id, e.target.value)}
-            disabled={isUpdating}
-            className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={`Change role for ${member.username}`}
-          >
-            {roleOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <button
-            type="button"
-            onClick={handleRemoveClick}
-            disabled={isRemoving}
-            className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label={`Remove ${member.username} from board`}
-          >
-            Remove
-          </button>
+          {showManageControls && (
+            <select
+              value={member.role}
+              onChange={(e) => onRoleChange(member.id, e.target.value)}
+              disabled={isUpdating}
+              className="flex-1 rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Change role for ${member.username}`}
+            >
+              {roleOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+          {showRemoveButton && (
+            <button
+              type="button"
+              onClick={handleRemoveClick}
+              disabled={isRemoving}
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-label={`Remove ${member.username} from board`}
+            >
+              Remove
+            </button>
+          )}
         </div>
       )}
     </li>
@@ -234,7 +240,7 @@ MemberListItem.propTypes = {
   }).isRequired,
   isCurrentUser: PropTypes.bool,
   canManage: PropTypes.bool,
-  isOwner: PropTypes.bool,
+  canRemove: PropTypes.bool,
   onRoleChange: PropTypes.func,
   onRemove: PropTypes.func,
   isUpdating: PropTypes.bool,
@@ -244,7 +250,7 @@ MemberListItem.propTypes = {
 MemberListItem.defaultProps = {
   isCurrentUser: false,
   canManage: false,
-  isOwner: false,
+  canRemove: false,
   onRoleChange: () => {},
   onRemove: () => {},
   isUpdating: false,
@@ -264,6 +270,7 @@ const BoardMembersPanel = ({
   error,
   // Management props (optional - only needed if user can manage)
   canManage,
+  isOwner,
   onSearchUsers,
   searchResults,
   isSearching,
@@ -525,6 +532,7 @@ const BoardMembersPanel = ({
                 member={member}
                 isCurrentUser={member.id === currentUserId}
                 canManage={canManage}
+                canRemove={isOwner}
                 onRoleChange={handleRoleChange}
                 onRemove={handleRemoveMember}
                 isUpdating={isUpdatingMember}
@@ -567,6 +575,7 @@ BoardMembersPanel.propTypes = {
   error: PropTypes.string,
   // Management props
   canManage: PropTypes.bool,
+  isOwner: PropTypes.bool,
   onSearchUsers: PropTypes.func,
   searchResults: PropTypes.arrayOf(
     PropTypes.shape({
@@ -593,6 +602,7 @@ BoardMembersPanel.defaultProps = {
   isLoading: false,
   error: null,
   canManage: false,
+  isOwner: false,
   onSearchUsers: null,
   searchResults: [],
   isSearching: false,
