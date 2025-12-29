@@ -1179,6 +1179,7 @@ const BoardViewPage = () => {
         isLoading={boardsState.membersStatus === 'loading'}
         error={boardsState.membersError}
         canManage={canManage}
+        isOwner={isOwner}
         onSearchUsers={handleSearchUsers}
         searchResults={userSearchResults}
         isSearching={isSearchingUsers}

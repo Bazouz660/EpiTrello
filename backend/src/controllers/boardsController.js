@@ -69,9 +69,9 @@ const getPopulatedMembers = async (boardId) => {
   const board = await Board.findById(boardId)
     .populate('members.user', '_id username email avatarUrl')
     .populate('owner', '_id username email avatarUrl');
-  
+
   if (!board) return [];
-  
+
   return [
     {
       id: board.owner._id.toString(),
@@ -267,8 +267,8 @@ export const removeBoardMember = async (req, res, next) => {
     const board = await Board.findById(id);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
-    // Only owner and admin can remove members
-    if (!canManage(board, req.user._id)) {
+    // Only owner can remove members
+    if (board.owner?.toString() !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
