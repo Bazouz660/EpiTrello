@@ -89,9 +89,30 @@ The services will be available at:
 - Backend API: http://localhost:5000
 - MongoDB: mongodb://localhost:27017
 
-## Continuous Integration
+## Continuous Integration & Deployment
 
-GitHub Actions workflows run linting, testing, and coverage checks on every push and pull request targeting `main`.
+GitHub Actions workflows automate the development lifecycle:
+
+### CI (`ci.yml`)
+
+- Runs on every push/PR to `main` and `dev`
+- Linting, testing, and coverage checks
+
+### CD (`cd.yml`)
+
+- Runs on push to `main` and `dev`
+- Deploys to **Fly.io** automatically
+- Backend + Frontend deployment with health checks
+
+### Production URLs
+
+| Service      | URL                                          |
+| ------------ | -------------------------------------------- |
+| Frontend     | https://epitrello-frontend.fly.dev           |
+| Backend API  | https://epitrello-backend.fly.dev/api        |
+| Health Check | https://epitrello-backend.fly.dev/api/health |
+
+For deployment details, see [doc/deployment-flyio.md](doc/deployment-flyio.md).
 
 ## Testing & Coverage
 

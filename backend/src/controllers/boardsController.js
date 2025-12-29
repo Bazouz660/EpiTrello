@@ -22,12 +22,37 @@ const sanitizeBackground = (background = {}) => {
 
 const resolveMembershipRole = (board, userId) => {
   const currentUserId = userId?.toString();
-  if (!currentUserId) return 'viewer';
+  if (!currentUserId) return null;
   if (board.owner?.toString() === currentUserId) return 'owner';
 
   const member = board.members?.find((entry) => entry.user?.toString() === currentUserId);
-  return member?.role ?? 'member';
+  return member?.role ?? null;
 };
+
+// Permission levels hierarchy: owner > admin > member > viewer
+// Returns true if the user has at least the required role
+const hasPermission = (board, userId, requiredRole) => {
+  const role = resolveMembershipRole(board, userId);
+  if (!role) return false;
+
+  const roleHierarchy = ['viewer', 'member', 'admin', 'owner'];
+  const userRoleIndex = roleHierarchy.indexOf(role);
+  const requiredRoleIndex = roleHierarchy.indexOf(requiredRole);
+
+  return userRoleIndex >= requiredRoleIndex;
+};
+
+// Check if user can view the board (any role)
+const canView = (board, userId) => hasPermission(board, userId, 'viewer');
+
+// Check if user can edit lists/cards (member or higher)
+const canEdit = (board, userId) => hasPermission(board, userId, 'member');
+
+// Check if user can manage board settings/members (admin or higher)
+const canManage = (board, userId) => hasPermission(board, userId, 'admin');
+
+// Export permission helpers for use in other controllers
+export { resolveMembershipRole, hasPermission, canView, canEdit, canManage };
 
 const toResponse = (board, userId) => ({
   id: board._id.toString(),
@@ -38,6 +63,32 @@ const toResponse = (board, userId) => ({
   background: board.background ?? { ...defaultBackground },
   membershipRole: resolveMembershipRole(board, userId),
 });
+
+// Helper to get populated members list
+const getPopulatedMembers = async (boardId) => {
+  const board = await Board.findById(boardId)
+    .populate('members.user', '_id username email avatarUrl')
+    .populate('owner', '_id username email avatarUrl');
+
+  if (!board) return [];
+
+  return [
+    {
+      id: board.owner._id.toString(),
+      username: board.owner.username,
+      email: board.owner.email,
+      avatarUrl: board.owner.avatarUrl,
+      role: 'owner',
+    },
+    ...board.members.map((m) => ({
+      id: m.user._id.toString(),
+      username: m.user.username,
+      email: m.user.email,
+      avatarUrl: m.user.avatarUrl,
+      role: m.role,
+    })),
+  ];
+};
 
 export const createBoard = async (req, res, next) => {
   try {
@@ -76,10 +127,8 @@ export const getBoard = async (req, res, next) => {
     const board = await Board.findById(id);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
-    // owner or member check
-    const isOwner = board.owner?.toString() === req.user._id.toString();
-    const isMember = board.members?.some((m) => m.user?.toString() === req.user._id.toString());
-    if (!isOwner && !isMember) return res.status(403).json({ message: 'Forbidden' });
+    // Any role (viewer or higher) can view the board
+    if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     return res.status(200).json({ board: toResponse(board, req.user._id) });
   } catch (error) {
@@ -95,7 +144,8 @@ export const updateBoard = async (req, res, next) => {
     const board = await Board.findById(id);
     if (!board) return res.status(404).json({ message: 'Board not found' });
 
-    if (board.owner?.toString() !== req.user._id.toString()) {
+    // Only owner and admin can update board settings
+    if (!canManage(board, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
@@ -124,6 +174,138 @@ export const deleteBoard = async (req, res, next) => {
     await board.deleteOne();
 
     return res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const addBoardMember = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { userId, role = 'member' } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required' });
+    }
+
+    const validRoles = ['admin', 'member', 'viewer'];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be admin, member, or viewer' });
+    }
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner and admin can manage members
+    if (!canManage(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot add the owner as a member
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot add board owner as a member' });
+    }
+
+    // Check if user is already a member
+    const existingMember = board.members.find((m) => m.user.toString() === userId);
+    if (existingMember) {
+      return res.status(400).json({ message: 'User is already a member of this board' });
+    }
+
+    board.members.push({ user: userId, role });
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateBoardMember = async (req, res, next) => {
+  try {
+    const { id, userId } = req.params;
+    const { role } = req.body;
+
+    const validRoles = ['admin', 'member', 'viewer'];
+    if (!role || !validRoles.includes(role)) {
+      return res.status(400).json({ message: 'Invalid role. Must be admin, member, or viewer' });
+    }
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner and admin can manage members
+    if (!canManage(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot update owner's role
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot change owner role' });
+    }
+
+    const memberIndex = board.members.findIndex((m) => m.user.toString() === userId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    board.members[memberIndex].role = role;
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const removeBoardMember = async (req, res, next) => {
+  try {
+    const { id, userId } = req.params;
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Only owner can remove members
+    if (board.owner?.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    // Cannot remove the owner
+    if (board.owner.toString() === userId) {
+      return res.status(400).json({ message: 'Cannot remove board owner' });
+    }
+
+    const memberIndex = board.members.findIndex((m) => m.user.toString() === userId);
+    if (memberIndex === -1) {
+      return res.status(404).json({ message: 'Member not found' });
+    }
+
+    board.members.splice(memberIndex, 1);
+    await board.save();
+
+    const members = await getPopulatedMembers(board._id);
+    return res.status(200).json({ board: toResponse(board, req.user._id), members });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getBoardMembers = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Any role can view members
+    if (!canView(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    const members = await getPopulatedMembers(id);
+    return res.status(200).json({ members });
   } catch (error) {
     next(error);
   }

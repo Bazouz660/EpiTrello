@@ -20,10 +20,21 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
 import { DroppableListArea, SortableCard, SortableList } from '../components/dnd/index.js';
-import { fetchBoardById, selectBoards } from '../features/boards/boardsSlice.js';
+import { selectAuth } from '../features/auth/authSlice.js';
+import {
+  addBoardMember,
+  fetchBoardById,
+  fetchBoardMembers,
+  removeBoardMember,
+  searchUsers,
+  selectBoards,
+  updateBoardMember,
+  clearMemberErrors,
+} from '../features/boards/boardsSlice.js';
 import {
   createCard,
   deleteCard,
@@ -75,6 +86,7 @@ const BoardViewPage = () => {
   const boardsState = useAppSelector(selectBoards);
   const listsState = useAppSelector(selectLists);
   const cardsState = useAppSelector(selectCards);
+  const authState = useAppSelector(selectAuth);
 
   const [newListTitle, setNewListTitle] = useState('');
   const [isListModalOpen, setIsListModalOpen] = useState(false);
@@ -83,7 +95,12 @@ const BoardViewPage = () => {
   const [cardModalError, setCardModalError] = useState(null);
   const [activeCardId, setActiveCardId] = useState(null);
   const [activeDragItem, setActiveDragItem] = useState(null);
+  const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
+  const [userSearchResults, setUserSearchResults] = useState([]);
+  const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const listTitleInputRef = useRef(null);
+  // Track card order during drag to sync with dnd-kit's visual state
+  const dragCardOrderRef = useRef(null);
 
   // Custom collision detection that handles lists and cards appropriately
   const collisionDetectionStrategy = useCallback(
@@ -156,6 +173,68 @@ const BoardViewPage = () => {
     setActiveCardId(null);
   };
 
+  const openMembersPanel = useCallback(() => {
+    setIsMembersPanelOpen(true);
+    setUserSearchResults([]);
+    dispatch(clearMemberErrors());
+    dispatch(fetchBoardMembers({ boardId }));
+  }, [dispatch, boardId]);
+
+  const closeMembersPanel = useCallback(() => {
+    setIsMembersPanelOpen(false);
+    setUserSearchResults([]);
+    dispatch(clearMemberErrors());
+  }, [dispatch]);
+
+  const handleSearchUsers = useCallback(
+    async (query) => {
+      setIsSearchingUsers(true);
+      try {
+        const result = await dispatch(searchUsers({ query })).unwrap();
+        setUserSearchResults(result);
+      } catch {
+        setUserSearchResults([]);
+      } finally {
+        setIsSearchingUsers(false);
+      }
+    },
+    [dispatch],
+  );
+
+  const handleAddMember = useCallback(
+    async (userId, role) => {
+      try {
+        await dispatch(addBoardMember({ boardId, userId, role })).unwrap();
+        setUserSearchResults([]);
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
+
+  const handleRemoveMember = useCallback(
+    async (userId) => {
+      try {
+        await dispatch(removeBoardMember({ boardId, userId })).unwrap();
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
+
+  const handleUpdateMemberRole = useCallback(
+    async (userId, role) => {
+      try {
+        await dispatch(updateBoardMember({ boardId, userId, role })).unwrap();
+      } catch {
+        // Error handled by slice
+      }
+    },
+    [dispatch, boardId],
+  );
+
   const isCardModalOpen = cardModal.mode !== null;
   const activeCard = activeCardId ? cardsState.entities[activeCardId] : null;
   const isCardDetailOpen = Boolean(activeCard);
@@ -215,6 +294,8 @@ const BoardViewPage = () => {
     } else if (type === 'card') {
       const card = cardsState.entities[active.id];
       setActiveDragItem({ type: 'card', data: card, originalListId: card.list });
+      // Initialize drag order tracking with current card positions for all lists
+      dragCardOrderRef.current = { ...cardsState.idsByList };
     }
   };
 
@@ -231,7 +312,7 @@ const BoardViewPage = () => {
 
     // Get the original source list from activeDragItem (stable reference)
     const originalSourceListId = activeDragItem?.originalListId;
-    if (!originalSourceListId) return;
+    if (!originalSourceListId || !dragCardOrderRef.current) return;
 
     // Determine the target list
     let overListId;
@@ -245,10 +326,10 @@ const BoardViewPage = () => {
 
     if (!overListId) return;
 
-    // Find which list currently contains the card
+    // Find which list currently contains the card in our tracked order
     let currentListId = null;
-    for (const listId of Object.keys(cardsState.idsByList)) {
-      if (cardsState.idsByList[listId]?.includes(activeId)) {
+    for (const listId of Object.keys(dragCardOrderRef.current)) {
+      if (dragCardOrderRef.current[listId]?.includes(activeId)) {
         currentListId = listId;
         break;
       }
@@ -256,32 +337,77 @@ const BoardViewPage = () => {
 
     if (!currentListId) return;
 
-    // Get current card arrays
-    const currentListCards = cardsState.idsByList[currentListId] ?? [];
-    const targetCards = cardsState.idsByList[overListId] ?? [];
+    // Get current card arrays from our tracked order
+    const currentListCards = [...(dragCardOrderRef.current[currentListId] ?? [])];
+    const targetCards = [...(dragCardOrderRef.current[overListId] ?? [])];
 
-    // Same list reordering is handled by dnd-kit visually and persisted in handleDragEnd
     if (currentListId === overListId) {
+      // Same list reordering
+      if (overType !== 'card' || overId === activeId) return;
+
+      const oldIndex = currentListCards.indexOf(activeId);
+      const overIndex = currentListCards.indexOf(overId);
+
+      if (oldIndex === -1 || overIndex === -1 || oldIndex === overIndex) return;
+
+      // Use arrayMove to reorder
+      const newCardIds = arrayMove(currentListCards, oldIndex, overIndex);
+
+      // Check if this would change anything
+      if (newCardIds.join(',') === currentListCards.join(',')) return;
+
+      // Update our tracked order
+      dragCardOrderRef.current = {
+        ...dragCardOrderRef.current,
+        [currentListId]: newCardIds,
+      };
+
+      // Dispatch optimistic update
+      dispatch(
+        optimisticMoveCard({
+          cardId: activeId,
+          sourceListId: currentListId,
+          targetListId: currentListId,
+          sourceListCardIds: newCardIds,
+          targetListCardIds: newCardIds,
+        }),
+      );
       return;
     }
 
     // Cross-list move: Move card from current list to target list
     const newSourceCards = currentListCards.filter((id) => id !== activeId);
 
-    // Calculate position in target list
-    let insertIndex = targetCards.length;
-    if (overType === 'card') {
-      const overIndex = targetCards.indexOf(overId);
+    // Calculate position in target list, excluding the active card if it's already there
+    const targetCardsWithoutActive = targetCards.filter((id) => id !== activeId);
+    let insertIndex = targetCardsWithoutActive.length;
+    if (overType === 'card' && overId !== activeId) {
+      const overIndex = targetCardsWithoutActive.indexOf(overId);
       if (overIndex !== -1) {
         insertIndex = overIndex;
       }
     }
 
     const newTargetCards = [
-      ...targetCards.slice(0, insertIndex),
+      ...targetCardsWithoutActive.slice(0, insertIndex),
       activeId,
-      ...targetCards.slice(insertIndex),
+      ...targetCardsWithoutActive.slice(insertIndex),
     ];
+
+    // Check if this would change anything
+    if (
+      newSourceCards.join(',') === currentListCards.join(',') &&
+      newTargetCards.join(',') === targetCards.join(',')
+    ) {
+      return;
+    }
+
+    // Update our tracked order
+    dragCardOrderRef.current = {
+      ...dragCardOrderRef.current,
+      [currentListId]: newSourceCards,
+      [overListId]: newTargetCards,
+    };
 
     dispatch(
       optimisticMoveCard({
@@ -300,6 +426,7 @@ const BoardViewPage = () => {
     const originalSourceListId =
       activeDragItem?.type === 'card' ? activeDragItem.originalListId : null;
     setActiveDragItem(null);
+    dragCardOrderRef.current = null;
 
     if (!over) return;
 
@@ -321,22 +448,8 @@ const BoardViewPage = () => {
       }
     } else if (activeType === 'card') {
       const activeId = active.id;
-      const overId = over.id;
-      const overType = over.data.current?.type;
 
-      // Determine the target list
-      let targetListId;
-      if (overType === 'card') {
-        targetListId = over.data.current?.listId;
-      } else if (overType === 'list-container') {
-        targetListId = over.data.current?.listId;
-      } else if (overType === 'list') {
-        targetListId = over.id;
-      }
-
-      if (!targetListId) return;
-
-      // Find which list currently contains the card (may have changed during drag)
+      // Find which list currently contains the card (state was updated in handleDragOver)
       let currentListId = null;
       for (const listId of Object.keys(cardsState.idsByList)) {
         if (cardsState.idsByList[listId]?.includes(activeId)) {
@@ -347,69 +460,32 @@ const BoardViewPage = () => {
 
       if (!currentListId) return;
 
-      const wasCrossListMove = originalSourceListId && originalSourceListId !== currentListId;
-
-      // Get current state
-      const sourceCards = cardsState.idsByList[originalSourceListId] ?? [];
       const currentListCards = cardsState.idsByList[currentListId] ?? [];
+      const position = currentListCards.indexOf(activeId);
 
-      if (wasCrossListMove) {
-        // Cross-list move - optimistic update already happened in handleDragOver
-        // Just persist current state to server
-        const position = currentListCards.indexOf(activeId);
+      if (position === -1) return;
 
-        if (position === -1) return; // Card wasn't moved, shouldn't happen
+      // Determine source list cards for the API call
+      const sourceCards = originalSourceListId
+        ? (cardsState.idsByList[originalSourceListId] ?? [])
+        : currentListCards;
 
-        dispatch(
-          moveCard({
-            cardId: activeId,
-            targetListId: currentListId,
-            position,
-            sourceListCardIds: sourceCards,
-            targetListCardIds: currentListCards,
-          }),
-        );
-      } else {
-        // Same list reordering - need to calculate new position and do optimistic update
-        const oldIndex = currentListCards.indexOf(activeId);
-        let newIndex = currentListCards.indexOf(overId);
-
-        if (overType === 'list-container' || overType === 'list') {
-          newIndex = currentListCards.length - 1;
-        }
-
-        if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-          const newCardIds = arrayMove(currentListCards, oldIndex, newIndex);
-
-          // Optimistic update
-          dispatch(
-            optimisticMoveCard({
-              cardId: activeId,
-              sourceListId: currentListId,
-              targetListId: currentListId,
-              sourceListCardIds: newCardIds,
-              targetListCardIds: newCardIds,
-            }),
-          );
-
-          // Persist to server
-          const position = newCardIds.indexOf(activeId);
-          dispatch(
-            moveCard({
-              cardId: activeId,
-              targetListId: currentListId,
-              position,
-              sourceListCardIds: newCardIds,
-              targetListCardIds: newCardIds,
-            }),
-          );
-        }
-      }
+      // Persist current state to server
+      dispatch(
+        moveCard({
+          cardId: activeId,
+          targetListId: currentListId,
+          position,
+          sourceListCardIds: sourceCards,
+          targetListCardIds: currentListCards,
+        }),
+      );
     }
   };
 
   useEffect(() => {
     dispatch(fetchBoardById({ id: boardId }));
+    dispatch(fetchBoardMembers({ boardId }));
   }, [dispatch, boardId]);
 
   useEffect(() => {
@@ -623,6 +699,13 @@ const BoardViewPage = () => {
   const membershipRole = board.membershipRole ?? 'owner';
   const isOwner = membershipRole === 'owner';
 
+  // Permission helpers based on role hierarchy: owner > admin > member > viewer
+  const canEdit = ['owner', 'admin', 'member'].includes(membershipRole);
+  const canManage = ['owner', 'admin'].includes(membershipRole);
+  const isViewer = membershipRole === 'viewer';
+
+  const currentUserId = authState.user?.id;
+
   const cardModalTitle = 'Add card';
   const cardModalDescription = 'Enter a title to create a new card in this list.';
   const cardModalPrimaryLabel = 'Create card';
@@ -660,11 +743,33 @@ const BoardViewPage = () => {
           <div className="flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => setIsListModalOpen(true)}
+              onClick={openMembersPanel}
               className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
             >
-              Add list
+              <svg
+                className="mr-2 h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+                />
+              </svg>
+              Members
             </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setIsListModalOpen(true)}
+                className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+              >
+                Add list
+              </button>
+            )}
             <Link
               to="/boards"
               className="inline-flex items-center rounded-md border border-white/30 bg-white/5 px-4 py-2 text-sm font-medium text-white hover:bg-white/20"
@@ -677,6 +782,13 @@ const BoardViewPage = () => {
         {listsError && (
           <div className="mx-auto mb-6 w-full max-w-6xl flex-shrink-0 rounded-lg border border-red-200 bg-red-50/90 p-4 text-sm text-red-700">
             {listsError}
+          </div>
+        )}
+
+        {isViewer && (
+          <div className="mx-auto mb-4 w-full max-w-6xl flex-shrink-0 rounded-lg border border-amber-200/50 bg-amber-500/20 px-4 py-2 text-sm text-amber-100 backdrop-blur">
+            <span className="font-medium">View only</span> — You can view this board but cannot make
+            changes.
           </div>
         )}
 
@@ -710,7 +822,7 @@ const BoardViewPage = () => {
                     listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
 
                   return (
-                    <SortableList key={list.id} id={list.id}>
+                    <SortableList key={list.id} id={list.id} activeDragType={activeDragItem?.type}>
                       {({
                         attributes,
                         listeners,
@@ -727,29 +839,31 @@ const BoardViewPage = () => {
                           }`}
                         >
                           <div className="mb-3 flex items-start gap-2">
-                            {/* Drag handle - separate from title */}
-                            <button
-                              type="button"
-                              className="mt-1 flex-shrink-0 cursor-grab rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
-                              {...attributes}
-                              {...listeners}
-                              aria-label="Drag to reorder list"
-                            >
-                              <svg
-                                xmlns="http://www.w3.org/2000/svg"
-                                width="16"
-                                height="16"
-                                viewBox="0 0 24 24"
-                                fill="currentColor"
+                            {/* Drag handle - only shown if user can edit */}
+                            {canEdit && (
+                              <button
+                                type="button"
+                                className="mt-1 flex-shrink-0 cursor-grab rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white active:cursor-grabbing"
+                                {...attributes}
+                                {...listeners}
+                                aria-label="Drag to reorder list"
                               >
-                                <circle cx="9" cy="5" r="1.5" />
-                                <circle cx="15" cy="5" r="1.5" />
-                                <circle cx="9" cy="12" r="1.5" />
-                                <circle cx="15" cy="12" r="1.5" />
-                                <circle cx="9" cy="19" r="1.5" />
-                                <circle cx="15" cy="19" r="1.5" />
-                              </svg>
-                            </button>
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="16"
+                                  height="16"
+                                  viewBox="0 0 24 24"
+                                  fill="currentColor"
+                                >
+                                  <circle cx="9" cy="5" r="1.5" />
+                                  <circle cx="15" cy="5" r="1.5" />
+                                  <circle cx="9" cy="12" r="1.5" />
+                                  <circle cx="15" cy="12" r="1.5" />
+                                  <circle cx="9" cy="19" r="1.5" />
+                                  <circle cx="15" cy="19" r="1.5" />
+                                </svg>
+                              </button>
+                            )}
                             <div className="min-w-0 flex-1">
                               {isEditing ? (
                                 <form onSubmit={handleUpdateList} className="space-y-1">
@@ -774,7 +888,7 @@ const BoardViewPage = () => {
                                     <p className="text-xs text-red-600">{listsState.updateError}</p>
                                   )}
                                 </form>
-                              ) : (
+                              ) : canEdit ? (
                                 <button
                                   type="button"
                                   onClick={() => startEditingList(list)}
@@ -784,16 +898,24 @@ const BoardViewPage = () => {
                                     {list.title}
                                   </span>
                                 </button>
+                              ) : (
+                                <div className="px-2 py-1">
+                                  <span className="block truncate text-base font-semibold text-white">
+                                    {list.title}
+                                  </span>
+                                </div>
                               )}
                             </div>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteList(list.id)}
-                              disabled={isDeletingList}
-                              className="inline-flex flex-shrink-0 items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
-                            >
-                              {isDeletingList ? 'Deleting…' : 'Delete'}
-                            </button>
+                            {canEdit && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteList(list.id)}
+                                disabled={isDeletingList}
+                                className="inline-flex flex-shrink-0 items-center rounded-md border border-rose-200/60 px-2 py-1 text-xs font-medium text-rose-200 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-75"
+                              >
+                                {isDeletingList ? 'Deleting…' : 'Delete'}
+                              </button>
+                            )}
                           </div>
                           {listsState.deleteError && listsState.deletingId === list.id && (
                             <p className="-mt-2 mb-2 text-xs text-rose-200">
@@ -808,25 +930,33 @@ const BoardViewPage = () => {
                               )}
                               {cardsError && <p className="text-xs text-rose-200">{cardsError}</p>}
                               {cards.map((card) => (
-                                <SortableCard key={card.id} id={card.id} listId={list.id}>
+                                <SortableCard
+                                  key={card.id}
+                                  id={card.id}
+                                  listId={list.id}
+                                  disabled={!canEdit}
+                                >
                                   <CardListItem
                                     card={card}
                                     onOpenDetail={() => handleCardDetailOpen(card.id)}
+                                    boardMembers={boardsState.members}
                                   />
                                 </SortableCard>
                               ))}
                             </SortableContext>
                           </DroppableListArea>
 
-                          <div className="mt-4">
-                            <button
-                              type="button"
-                              onClick={() => openCreateCardModal(list.id)}
-                              className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
-                            >
-                              + Add card
-                            </button>
-                          </div>
+                          {canEdit && (
+                            <div className="mt-4">
+                              <button
+                                type="button"
+                                onClick={() => openCreateCardModal(list.id)}
+                                className="inline-flex w-full items-center justify-center rounded-md border border-dashed border-white/40 px-3 py-2 text-sm font-medium text-white/90 hover:bg-white/10"
+                              >
+                                + Add card
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
                     </SortableList>
@@ -1038,8 +1168,31 @@ const BoardViewPage = () => {
           onDelete={() => handleDeleteCard(activeCard.id)}
           isDeleting={isDeletingActiveCard}
           deleteError={activeCardDeleteError}
+          readOnly={!canEdit}
         />
       )}
+
+      <BoardMembersPanel
+        isOpen={isMembersPanelOpen}
+        onClose={closeMembersPanel}
+        board={board}
+        members={boardsState.members}
+        currentUserId={currentUserId}
+        isLoading={boardsState.membersStatus === 'loading'}
+        error={boardsState.membersError}
+        canManage={canManage}
+        isOwner={isOwner}
+        onSearchUsers={handleSearchUsers}
+        searchResults={userSearchResults}
+        isSearching={isSearchingUsers}
+        onAddMember={handleAddMember}
+        isAddingMember={boardsState.addMemberStatus === 'loading'}
+        addMemberError={boardsState.addMemberError}
+        onRemoveMember={handleRemoveMember}
+        isRemovingMember={boardsState.removeMemberStatus === 'loading'}
+        onUpdateMemberRole={handleUpdateMemberRole}
+        isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
+      />
     </section>
   );
 };

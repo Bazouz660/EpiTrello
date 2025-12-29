@@ -136,6 +136,7 @@ const CardDetailModal = ({
   onDelete,
   isDeleting,
   deleteError,
+  readOnly = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [titleValue, setTitleValue] = useState(card.title);
@@ -365,7 +366,7 @@ const CardDetailModal = ({
 
             {/* Header Actions */}
             <div className="flex items-center gap-2">
-              {isEditing ? (
+              {!readOnly && isEditing ? (
                 <>
                   <button
                     type="button"
@@ -391,7 +392,7 @@ const CardDetailModal = ({
                     Cancel
                   </button>
                 </>
-              ) : (
+              ) : !readOnly ? (
                 <button
                   type="button"
                   onClick={beginEditing}
@@ -400,7 +401,7 @@ const CardDetailModal = ({
                   <PencilIcon />
                   Edit
                 </button>
-              )}
+              ) : null}
               <button
                 type="button"
                 onClick={onClose}
@@ -808,20 +809,22 @@ const CardDetailModal = ({
                   )}
                 </section>
 
-                {/* Danger Zone */}
-                <section className="rounded-xl border border-rose-200 bg-rose-50/50 p-4">
-                  <h3 className="mb-3 text-sm font-semibold text-rose-700">Danger zone</h3>
-                  <button
-                    type="button"
-                    onClick={onDelete}
-                    disabled={isDeleting}
-                    className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-600 shadow-sm transition-colors hover:bg-rose-50 disabled:opacity-70"
-                  >
-                    <TrashIcon />
-                    {isDeleting ? 'Deleting…' : 'Delete card'}
-                  </button>
-                  {deleteError && <p className="mt-2 text-xs text-rose-600">{deleteError}</p>}
-                </section>
+                {/* Danger Zone - only shown if user can edit */}
+                {!readOnly && (
+                  <section className="rounded-xl border border-rose-200 bg-rose-50/50 p-4">
+                    <h3 className="mb-3 text-sm font-semibold text-rose-700">Danger zone</h3>
+                    <button
+                      type="button"
+                      onClick={onDelete}
+                      disabled={isDeleting}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-rose-300 bg-white px-4 py-2 text-sm font-semibold text-rose-600 shadow-sm transition-colors hover:bg-rose-50 disabled:opacity-70"
+                    >
+                      <TrashIcon />
+                      {isDeleting ? 'Deleting…' : 'Delete card'}
+                    </button>
+                    {deleteError && <p className="mt-2 text-xs text-rose-600">{deleteError}</p>}
+                  </section>
+                )}
               </div>
             </div>
           </form>
@@ -881,6 +884,7 @@ CardDetailModal.propTypes = {
   onDelete: PropTypes.func.isRequired,
   isDeleting: PropTypes.bool,
   deleteError: PropTypes.string,
+  readOnly: PropTypes.bool,
 };
 
 export default CardDetailModal;

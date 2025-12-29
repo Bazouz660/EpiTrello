@@ -41,6 +41,48 @@ EpiTrello follows a client-server architecture with a focus on real-time collabo
 
 ## DevOps & Tooling
 
-- Docker Compose orchestrates MongoDB, backend, and frontend containers.
-- GitHub Actions workflow validates lint, test, and coverage gates.
+- Docker Compose orchestrates MongoDB, backend, and frontend containers for local development.
+- GitHub Actions workflows:
+  - **CI**: Validates lint, test, and coverage gates on every push/PR.
+  - **CD**: Automated deployment to Fly.io on push to `main` or `dev`.
 - Husky + lint-staged enforce code quality pre-commit.
+
+## Deployment Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                         GITHUB                                   │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────────────┐ │
+│  │   Push to   │───▶│     CI      │───▶│         CD          │ │
+│  │  main/dev   │    │ (lint/test) │    │ (deploy to Fly.io)  │ │
+│  └─────────────┘    └─────────────┘    └──────────┬──────────┘ │
+└───────────────────────────────────────────────────┼─────────────┘
+                                                    │
+                                                    ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                          FLY.IO                                  │
+│                                                                  │
+│   ┌─────────────────────┐       ┌─────────────────────┐        │
+│   │      Frontend       │       │       Backend       │        │
+│   │  epitrello-frontend │◄─────▶│  epitrello-backend  │        │
+│   │    (React/Vite)     │       │   (Node/Express)    │        │
+│   └─────────────────────┘       └──────────┬──────────┘        │
+│                                            │                    │
+└────────────────────────────────────────────┼────────────────────┘
+                                             │
+                                             ▼
+                           ┌─────────────────────────────────┐
+                           │        MONGODB ATLAS            │
+                           │      (Cloud Database)           │
+                           └─────────────────────────────────┘
+```
+
+### Production URLs
+
+| Service  | URL                                   |
+| -------- | ------------------------------------- |
+| Frontend | https://epitrello-frontend.fly.dev    |
+| Backend  | https://epitrello-backend.fly.dev     |
+| API      | https://epitrello-backend.fly.dev/api |
+
+For detailed deployment instructions, see [deployment-flyio.md](deployment-flyio.md).
