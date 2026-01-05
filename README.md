@@ -117,4 +117,4 @@ For deployment details, see [doc/deployment-flyio.md](doc/deployment-flyio.md).
 ## Testing & Coverage
 
 - Vitest powers both frontend and backend test suites.
-- Coverage thresholds are enforced at 80/70/80/80 for statements/branches/functions/lines to satisfy the >70% requirement.
+- Coverage thresholds are enforced at 90/80/80/90 for statements/branches/functions/lines to satisfy the >90% requirement.

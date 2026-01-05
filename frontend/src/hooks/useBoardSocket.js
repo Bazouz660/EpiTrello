@@ -28,6 +28,7 @@ import {
   boardLeft,
   userJoinedBoard,
   userLeftBoard,
+  cursorPositionUpdated,
 } from '../features/socket/socketSlice.js';
 import {
   connectSocket,
@@ -36,6 +37,7 @@ import {
   leaveBoard,
   getSocket,
   subscribeToEvents,
+  sendCursorPosition,
 } from '../services/socketService.js';
 
 import { useAppDispatch, useAppSelector } from './index.js';
@@ -99,6 +101,11 @@ export const useBoardSocket = (boardId, token) => {
       },
       'board:user-left': (data) => {
         dispatch(userLeftBoard(data));
+      },
+
+      // Cursor position events
+      'cursor:updated': (data) => {
+        dispatch(cursorPositionUpdated(data));
       },
 
       // List events
@@ -186,9 +193,9 @@ export const useBoardSocket = (boardId, token) => {
         // Set up event handlers
         unsubscribeRef.current = setupEventHandlers();
 
-        // Join the board room
-        await joinBoard(boardId);
-        dispatch(boardJoined({ boardId }));
+        // Join the board room - returns activeUsers list
+        const joinData = await joinBoard(boardId);
+        dispatch(boardJoined({ boardId, activeUsers: joinData.activeUsers || [] }));
         hasConnectedRef.current = true;
       } catch (error) {
         console.error('Socket connection failed:', error);
@@ -219,12 +226,24 @@ export const useBoardSocket = (boardId, token) => {
     };
   }, []);
 
+  // Memoized cursor update function
+  const updateCursorPosition = useCallback(
+    (x, y) => {
+      if (boardId) {
+        sendCursorPosition(boardId, x, y);
+      }
+    },
+    [boardId],
+  );
+
   return {
     status: socketState.status,
     isConnected: socketState.status === 'connected',
     error: socketState.error,
     onlineUsers: socketState.onlineUsers,
+    cursorPositions: socketState.cursorPositions,
     reconnectAttempts: socketState.reconnectAttempts,
+    updateCursorPosition,
   };
 };
 

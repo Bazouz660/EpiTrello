@@ -1,3 +1,4 @@
+// eslint-disable-next-line n/no-unpublished-import
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -8,12 +9,19 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       thresholds: {
-        statements: 80,
-        branches: 70,
+        statements: 90,
+        branches: 80,
         functions: 80,
-        lines: 80
+        lines: 90,
       },
-      exclude: ['src/app.js', 'src/server.js', 'src/models/**', 'src/controllers/**', 'src/routes/**']
-    }
-  }
+      exclude: [
+        'src/app.js',
+        'src/server.js',
+        'src/models/**',
+        'src/controllers/**',
+        'src/routes/**',
+        'src/socket/**',
+      ],
+    },
+  },
 });

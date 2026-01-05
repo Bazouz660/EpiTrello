@@ -14,12 +14,16 @@ import {
   userJoinedBoard,
   userLeftBoard,
   setOnlineUsers,
+  cursorPositionUpdated,
+  removeCursorPosition,
+  clearStaleCursors,
   resetSocketState,
   selectSocket,
   selectSocketStatus,
   selectIsConnected,
   selectCurrentBoardId,
   selectOnlineUsers,
+  selectCursorPositions,
 } from './socketSlice.js';
 
 describe('socketSlice', () => {
@@ -36,6 +40,7 @@ describe('socketSlice', () => {
       expect(initialState.socketId).toBeNull();
       expect(initialState.currentBoardId).toBeNull();
       expect(initialState.onlineUsers).toEqual([]);
+      expect(initialState.cursorPositions).toEqual({});
       expect(initialState.reconnectAttempts).toBe(0);
     });
   });
@@ -78,6 +83,25 @@ describe('socketSlice', () => {
       expect(state.lastDisconnectReason).toBe('transport close');
     });
 
+    it('should handle disconnected without reason', () => {
+      const state = socketReducer(
+        { ...initialState, status: 'connected', socketId: 'socket-123' },
+        disconnected(),
+      );
+      expect(state.status).toBe('disconnected');
+      expect(state.socketId).toBeNull();
+      expect(state.lastDisconnectReason).toBeNull();
+    });
+
+    it('should handle disconnected with empty payload', () => {
+      const state = socketReducer(
+        { ...initialState, status: 'connected', socketId: 'socket-123' },
+        disconnected({}),
+      );
+      expect(state.status).toBe('disconnected');
+      expect(state.lastDisconnectReason).toBeNull();
+    });
+
     it('should handle reconnecting', () => {
       const state = socketReducer(
         { ...initialState, status: 'disconnected', reconnectAttempts: 2 },
@@ -95,6 +119,16 @@ describe('socketSlice', () => {
       expect(state.joinedAt).toBeTruthy();
     });
 
+    it('should handle boardJoined with activeUsers', () => {
+      const activeUsers = [
+        { userId: 'user-1', username: 'User 1', avatarUrl: null },
+        { userId: 'user-2', username: 'User 2', avatarUrl: null },
+      ];
+      const state = socketReducer(initialState, boardJoined({ boardId: 'board-123', activeUsers }));
+      expect(state.currentBoardId).toBe('board-123');
+      expect(state.onlineUsers).toEqual(activeUsers);
+    });
+
     it('should handle boardLeft', () => {
       const state = socketReducer(
         {
@@ -102,12 +136,14 @@ describe('socketSlice', () => {
           currentBoardId: 'board-123',
           joinedAt: new Date().toISOString(),
           onlineUsers: [{ userId: 'user-1', username: 'Test User' }],
+          cursorPositions: { 'user-1': { x: 50, y: 50 } },
         },
         boardLeft(),
       );
       expect(state.currentBoardId).toBeNull();
       expect(state.joinedAt).toBeNull();
       expect(state.onlineUsers).toEqual([]);
+      expect(state.cursorPositions).toEqual({});
     });
   });
 
@@ -141,10 +177,16 @@ describe('socketSlice', () => {
           { userId: 'user-1', username: 'User 1' },
           { userId: 'user-2', username: 'User 2' },
         ],
+        cursorPositions: {
+          'user-1': { x: 25, y: 25, username: 'User 1', lastUpdate: Date.now() },
+          'user-2': { x: 75, y: 75, username: 'User 2', lastUpdate: Date.now() },
+        },
       };
       const state = socketReducer(stateWithUsers, userLeftBoard({ userId: 'user-1' }));
       expect(state.onlineUsers).toHaveLength(1);
       expect(state.onlineUsers[0].userId).toBe('user-2');
+      expect(state.cursorPositions['user-1']).toBeUndefined();
+      expect(state.cursorPositions['user-2']).toBeDefined();
     });
 
     it('should handle setOnlineUsers', () => {
@@ -154,6 +196,89 @@ describe('socketSlice', () => {
       ];
       const state = socketReducer(initialState, setOnlineUsers(users));
       expect(state.onlineUsers).toEqual(users);
+    });
+  });
+
+  describe('cursor position tracking', () => {
+    it('should handle cursorPositionUpdated', () => {
+      const state = socketReducer(
+        initialState,
+        cursorPositionUpdated({
+          userId: 'user-1',
+          username: 'User 1',
+          avatarUrl: 'https://example.com/avatar.jpg',
+          x: 50,
+          y: 75,
+        }),
+      );
+      expect(state.cursorPositions['user-1']).toBeDefined();
+      expect(state.cursorPositions['user-1'].x).toBe(50);
+      expect(state.cursorPositions['user-1'].y).toBe(75);
+      expect(state.cursorPositions['user-1'].username).toBe('User 1');
+      expect(state.cursorPositions['user-1'].avatarUrl).toBe('https://example.com/avatar.jpg');
+      expect(state.cursorPositions['user-1'].lastUpdate).toBeDefined();
+    });
+
+    it('should update existing cursor position', () => {
+      const stateWithCursor = {
+        ...initialState,
+        cursorPositions: {
+          'user-1': { x: 25, y: 25, username: 'User 1', avatarUrl: null, lastUpdate: 1000 },
+        },
+      };
+      const state = socketReducer(
+        stateWithCursor,
+        cursorPositionUpdated({
+          userId: 'user-1',
+          username: 'User 1',
+          avatarUrl: null,
+          x: 75,
+          y: 80,
+        }),
+      );
+      expect(state.cursorPositions['user-1'].x).toBe(75);
+      expect(state.cursorPositions['user-1'].y).toBe(80);
+    });
+
+    it('should handle removeCursorPosition', () => {
+      const stateWithCursors = {
+        ...initialState,
+        cursorPositions: {
+          'user-1': { x: 25, y: 25, username: 'User 1', lastUpdate: Date.now() },
+          'user-2': { x: 75, y: 75, username: 'User 2', lastUpdate: Date.now() },
+        },
+      };
+      const state = socketReducer(stateWithCursors, removeCursorPosition({ userId: 'user-1' }));
+      expect(state.cursorPositions['user-1']).toBeUndefined();
+      expect(state.cursorPositions['user-2']).toBeDefined();
+    });
+
+    it('should handle clearStaleCursors with default threshold', () => {
+      const now = Date.now();
+      const stateWithCursors = {
+        ...initialState,
+        cursorPositions: {
+          'user-1': { x: 25, y: 25, username: 'User 1', lastUpdate: now - 6000 }, // stale (6s old)
+          'user-2': { x: 75, y: 75, username: 'User 2', lastUpdate: now - 1000 }, // fresh (1s old)
+        },
+      };
+      const state = socketReducer(stateWithCursors, clearStaleCursors());
+      expect(state.cursorPositions['user-1']).toBeUndefined();
+      expect(state.cursorPositions['user-2']).toBeDefined();
+    });
+
+    it('should handle clearStaleCursors with custom threshold', () => {
+      const now = Date.now();
+      const stateWithCursors = {
+        ...initialState,
+        cursorPositions: {
+          'user-1': { x: 25, y: 25, username: 'User 1', lastUpdate: now - 3000 }, // stale with 2s threshold
+          'user-2': { x: 75, y: 75, username: 'User 2', lastUpdate: now - 1000 }, // fresh
+        },
+      };
+      const state = socketReducer(stateWithCursors, clearStaleCursors({ threshold: 2000 }));
+      expect(state.cursorPositions['user-1']).toBeUndefined();
+      expect(state.cursorPositions['user-2']).toBeDefined();
     });
   });
 
@@ -193,6 +318,9 @@ describe('socketSlice', () => {
         socketId: 'socket-123',
         currentBoardId: 'board-456',
         onlineUsers: [{ userId: 'user-1', username: 'User 1' }],
+        cursorPositions: {
+          'user-2': { x: 50, y: 50, username: 'User 2', lastUpdate: Date.now() },
+        },
       },
     };
 
@@ -219,6 +347,10 @@ describe('socketSlice', () => {
 
     it('selectOnlineUsers should return online users', () => {
       expect(selectOnlineUsers(mockRootState)).toEqual([{ userId: 'user-1', username: 'User 1' }]);
+    });
+
+    it('selectCursorPositions should return cursor positions', () => {
+      expect(selectCursorPositions(mockRootState)).toEqual(mockRootState.socket.cursorPositions);
     });
   });
 });
