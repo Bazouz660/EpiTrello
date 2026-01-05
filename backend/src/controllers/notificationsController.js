@@ -1,5 +1,6 @@
 import { Notification } from '../models/Notification.js';
 import { User } from '../models/User.js';
+import { broadcastToUser } from '../socket/index.js';
 
 const toResponse = (notification) => ({
   id: notification._id.toString(),
@@ -43,6 +44,15 @@ export const createNotification = async ({
   });
 
   await notification.save();
+
+  // Populate actor for the response and broadcast
+  await notification.populate('actor', '_id username avatarUrl');
+
+  // Broadcast to recipient via socket
+  broadcastToUser(recipientId.toString(), 'notification:new', {
+    notification: toResponse(notification),
+  });
+
   return notification;
 };
 
@@ -74,7 +84,15 @@ export const createNotifications = async ({
   }
 
   if (notifications.length > 0) {
-    await Notification.insertMany(notifications);
+    const inserted = await Notification.insertMany(notifications);
+
+    // Populate actors and broadcast to each recipient
+    for (const notification of inserted) {
+      await notification.populate('actor', '_id username avatarUrl');
+      broadcastToUser(notification.recipient.toString(), 'notification:new', {
+        notification: toResponse(notification),
+      });
+    }
   }
 
   return notifications;
