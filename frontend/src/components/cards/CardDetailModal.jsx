@@ -2,6 +2,9 @@ import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import UserAvatar from '../common/UserAvatar';
 
+import renderTextWithMentions from '../../utils/renderTextWithMentions.jsx';
+import MentionTextarea from '../MentionTextarea.jsx';
+
 const formatDateTime = (value) => {
   if (!value) return null;
   const date = new Date(value);
@@ -137,6 +140,9 @@ const CardDetailModal = ({
   onDelete,
   isDeleting,
   deleteError,
+  onAddComment,
+  isAddingComment,
+  addCommentError,
   readOnly = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
@@ -144,6 +150,7 @@ const CardDetailModal = ({
   const [descriptionValue, setDescriptionValue] = useState(card.description ?? '');
   const [dueDateValue, setDueDateValue] = useState(formatInputDateTime(card.dueDate));
   const [labelsState, setLabelsState] = useState(Array.isArray(card.labels) ? card.labels : []);
+  const [commentText, setCommentText] = useState('');
   const [assignedState, setAssignedState] = useState(
     Array.isArray(card.assignedMembers) ? card.assignedMembers : [],
   );
@@ -258,6 +265,18 @@ const CardDetailModal = ({
       setIsEditing(false);
     } catch {
       // keep editing mode so the user can adjust values
+    }
+  };
+
+  const handleAddComment = async () => {
+    const trimmedText = commentText.trim();
+    if (!trimmedText || !onAddComment) return;
+
+    try {
+      await onAddComment(trimmedText);
+      setCommentText('');
+    } catch {
+      // keep comment text so user can retry
     }
   };
 
@@ -432,20 +451,23 @@ const CardDetailModal = ({
                       <label htmlFor="card-description" className="sr-only">
                         Card description
                       </label>
-                      <textarea
+                      <MentionTextarea
                         id="card-description"
                         value={descriptionValue}
-                        onChange={(event) => setDescriptionValue(event.target.value)}
+                        onChange={setDescriptionValue}
                         rows={4}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm text-slate-700 shadow-sm transition-colors focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                        placeholder="Add a more detailed description…"
+                        className="border-slate-200 bg-white px-4 py-3 text-slate-700 shadow-sm focus:ring-2 focus:ring-blue-500/20"
+                        placeholder="Add a more detailed description… Use @username to mention someone"
                         aria-label="Card description"
                         disabled={isSaving}
+                        members={boardMembers}
                       />
                     </>
                   ) : (
                     <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
-                      {descriptionValue || (
+                      {descriptionValue ? (
+                        renderTextWithMentions(descriptionValue, memberLookup)
+                      ) : (
                         <span className="italic text-slate-400">No description provided.</span>
                       )}
                     </p>
@@ -570,6 +592,34 @@ const CardDetailModal = ({
                       </span>
                     )}
                   </div>
+
+                  {/* Add Comment */}
+                  {!readOnly && (
+                    <div className="mb-4">
+                      <MentionTextarea
+                        value={commentText}
+                        onChange={setCommentText}
+                        placeholder="Write a comment..."
+                        rows={2}
+                        disabled={isAddingComment}
+                        members={boardMembers}
+                      />
+                      {addCommentError && (
+                        <p className="mt-1 text-xs text-red-600">{addCommentError}</p>
+                      )}
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleAddComment}
+                          disabled={!commentText.trim() || isAddingComment}
+                          className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {isAddingComment ? 'Posting...' : 'Post Comment'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {comments.length > 0 ? (
                     <ul className="max-h-64 space-y-3 overflow-y-auto pr-1">
                       {comments.map((comment) => (
@@ -595,7 +645,9 @@ const CardDetailModal = ({
                               </p>
                             </div>
                           </div>
-                          <p className="mt-2 text-sm text-slate-700">{comment.text}</p>
+                          <p className="mt-2 text-sm text-slate-700">
+                            {renderTextWithMentions(comment.text, memberLookup)}
+                          </p>
                         </li>
                       ))}
                     </ul>
@@ -895,6 +947,9 @@ CardDetailModal.propTypes = {
   onDelete: PropTypes.func.isRequired,
   isDeleting: PropTypes.bool,
   deleteError: PropTypes.string,
+  onAddComment: PropTypes.func,
+  isAddingComment: PropTypes.bool,
+  addCommentError: PropTypes.string,
   readOnly: PropTypes.bool,
 };
 
