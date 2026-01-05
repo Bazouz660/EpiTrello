@@ -26,6 +26,22 @@ describe('UserCursor', () => {
     expect(screen.getByText('John')).toBeInTheDocument();
   });
 
+  it('displays single-word username correctly', () => {
+    render(<UserCursor {...mockCursor} username="Alice" />);
+    expect(screen.getByText('Alice')).toBeInTheDocument();
+  });
+
+  it('handles empty username gracefully', () => {
+    render(<UserCursor {...mockCursor} username="" />);
+    expect(screen.getByText('User')).toBeInTheDocument();
+  });
+
+  it('does not render avatar when avatarUrl is null', () => {
+    render(<UserCursor {...mockCursor} />);
+    const img = document.querySelector('img');
+    expect(img).not.toBeInTheDocument();
+  });
+
   it('renders avatar image when URL is provided', () => {
     const cursorWithAvatar = {
       ...mockCursor,

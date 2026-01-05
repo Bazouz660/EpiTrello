@@ -36,6 +36,27 @@ describe('UserAvatar', () => {
     expect(screen.getByText('John Doe')).toBeInTheDocument();
   });
 
+  it('hides tooltip on mouse leave', () => {
+    render(<UserAvatar user={mockUser} showTooltip={true} />);
+
+    const avatar = screen.getByText('JD').parentElement;
+    fireEvent.mouseEnter(avatar);
+    expect(screen.getByText('John Doe')).toBeInTheDocument();
+
+    fireEvent.mouseLeave(avatar);
+    expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+  });
+
+  it('does not show tooltip when showTooltip is false', () => {
+    render(<UserAvatar user={mockUser} showTooltip={false} />);
+
+    const avatar = screen.getByText('JD').parentElement;
+    fireEvent.mouseEnter(avatar);
+
+    // Tooltip should not appear
+    expect(screen.queryByText('John Doe')).not.toBeInTheDocument();
+  });
+
   it('applies correct size classes', () => {
     const { rerender } = render(<UserAvatar user={mockUser} size="sm" />);
     expect(screen.getByText('JD')).toHaveClass('w-6', 'h-6');
@@ -55,6 +76,17 @@ describe('UserAvatar', () => {
     const singleNameUser = { userId: 'user-2', username: 'Alice', avatarUrl: null };
     render(<UserAvatar user={singleNameUser} />);
     expect(screen.getByText('AL')).toBeInTheDocument();
+  });
+
+  it('handles empty or missing username gracefully', () => {
+    const emptyNameUser = { userId: 'user-3', username: '', avatarUrl: null };
+    render(<UserAvatar user={emptyNameUser} />);
+    expect(screen.getByText('?')).toBeInTheDocument();
+  });
+
+  it('applies custom className', () => {
+    const { container } = render(<UserAvatar user={mockUser} className="custom-class" />);
+    expect(container.firstChild).toHaveClass('custom-class');
   });
 });
 
@@ -130,6 +162,36 @@ describe('ActiveUsersDisplay', () => {
 
     // Dropdown should be closed
     expect(screen.queryByText('All active users (5)')).not.toBeInTheDocument();
+  });
+
+  it('closes dropdown when pressing Escape key', () => {
+    render(<ActiveUsersDisplay users={mockUsers} currentUserId="user-1" maxVisible={3} />);
+
+    // Open dropdown
+    fireEvent.click(screen.getByText('+2'));
+    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+
+    // Press Escape on backdrop
+    const backdrop = screen.getByRole('button', { name: 'Close user list' });
+    fireEvent.keyDown(backdrop, { key: 'Escape' });
+
+    // Dropdown should be closed
+    expect(screen.queryByText('All active users (5)')).not.toBeInTheDocument();
+  });
+
+  it('does not close dropdown for other keys', () => {
+    render(<ActiveUsersDisplay users={mockUsers} currentUserId="user-1" maxVisible={3} />);
+
+    // Open dropdown
+    fireEvent.click(screen.getByText('+2'));
+    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+
+    // Press another key on backdrop
+    const backdrop = screen.getByRole('button', { name: 'Close user list' });
+    fireEvent.keyDown(backdrop, { key: 'Enter' });
+
+    // Dropdown should still be open
+    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
   });
 
   it('supports different sizes', () => {
