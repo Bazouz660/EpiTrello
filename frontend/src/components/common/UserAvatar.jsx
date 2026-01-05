@@ -59,7 +59,7 @@ const UserAvatar = ({
     return (
       <img
         src={avatarUrl}
-        alt={username || 'User avatar'}
+        alt={username ? `${username}'s avatar` : 'User avatar'}
         title={showTooltip ? username : undefined}
         className={`${config.container} ${config.ring} ${ringColor} rounded-full object-cover ${className}`}
       />
