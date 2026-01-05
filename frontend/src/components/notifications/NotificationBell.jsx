@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { selectAuth } from '../../features/auth/authSlice.js';
 import {
+  addNotification,
   fetchNotifications,
   fetchUnreadCount,
   markAsRead,
@@ -9,6 +11,7 @@ import {
   selectNotifications,
 } from '../../features/notifications/notificationsSlice.js';
 import { useAppDispatch, useAppSelector } from '../../hooks/index.js';
+import { connectSocket, subscribe } from '../../services/socketService.js';
 
 const BellIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -101,8 +104,37 @@ const NotificationBell = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { items: notifications, unreadCount, status } = useAppSelector(selectNotifications);
+  const { token } = useAppSelector(selectAuth);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Connect to socket and subscribe to real-time notifications
+  useEffect(() => {
+    if (!token) return;
+
+    let unsubscribe = null;
+
+    const setupSocket = async () => {
+      try {
+        await connectSocket(token);
+        unsubscribe = subscribe('notification:new', (data) => {
+          if (data.notification) {
+            dispatch(addNotification(data.notification));
+          }
+        });
+      } catch (error) {
+        console.error('[NotificationBell] Socket connection failed:', error);
+      }
+    };
+
+    setupSocket();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [token, dispatch]);
 
   useEffect(() => {
     dispatch(fetchUnreadCount());
