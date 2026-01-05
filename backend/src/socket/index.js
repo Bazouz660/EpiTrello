@@ -9,6 +9,65 @@ import { logger } from '../utils/logger.js';
 // Store io instance for use in controllers
 let ioInstance = null;
 
+// Track active users per board room: Map<boardId, Map<socketId, userData>>
+const boardActiveUsers = new Map();
+
+/**
+ * Get active users for a board
+ * @param {string} boardId
+ * @returns {Array} Array of active user objects
+ */
+const getActiveUsersForBoard = (boardId) => {
+  const users = boardActiveUsers.get(boardId);
+  if (!users) return [];
+
+  // Dedupe by userId (user may have multiple sockets)
+  const uniqueUsers = new Map();
+  for (const userData of users.values()) {
+    if (!uniqueUsers.has(userData.userId)) {
+      uniqueUsers.set(userData.userId, userData);
+    }
+  }
+  return Array.from(uniqueUsers.values());
+};
+
+/**
+ * Add user to board's active users
+ * @param {string} boardId
+ * @param {string} socketId
+ * @param {object} userData
+ */
+const addActiveUser = (boardId, socketId, userData) => {
+  if (!boardActiveUsers.has(boardId)) {
+    boardActiveUsers.set(boardId, new Map());
+  }
+  boardActiveUsers.get(boardId).set(socketId, {
+    ...userData,
+    joinedAt: new Date().toISOString(),
+  });
+};
+
+/**
+ * Remove user from board's active users
+ * @param {string} boardId
+ * @param {string} socketId
+ * @returns {object|null} The removed user data
+ */
+const removeActiveUser = (boardId, socketId) => {
+  const boardUsers = boardActiveUsers.get(boardId);
+  if (!boardUsers) return null;
+
+  const userData = boardUsers.get(socketId);
+  boardUsers.delete(socketId);
+
+  // Clean up empty board entries
+  if (boardUsers.size === 0) {
+    boardActiveUsers.delete(boardId);
+  }
+
+  return userData;
+};
+
 /**
  * Get the Socket.IO instance
  * @returns {import('socket.io').Server|null}
@@ -88,11 +147,25 @@ const handleConnection = (io, socket) => {
       socket.join(roomName);
       logger.debug(`Socket ${socket.id} joined room ${roomName}`);
 
-      // Notify the user they've joined
+      // Track user data for active users
+      const userData = {
+        userId: socket.user._id.toString(),
+        username: socket.user.username,
+        avatarUrl: socket.user.avatarUrl,
+      };
+
+      // Add user to active users tracking
+      addActiveUser(boardId, socket.id, userData);
+
+      // Get current active users list for the joining user
+      const activeUsers = getActiveUsersForBoard(boardId);
+
+      // Notify the user they've joined, including current active users
       socket.emit('board:joined', {
         boardId,
         userId: socket.user._id.toString(),
         username: socket.user.username,
+        activeUsers,
       });
 
       // Notify others in the room that a new user joined
@@ -112,6 +185,10 @@ const handleConnection = (io, socket) => {
     if (!boardId) return;
 
     const roomName = `board:${boardId}`;
+
+    // Remove from active users tracking
+    removeActiveUser(boardId, socket.id);
+
     socket.leave(roomName);
     logger.debug(`Socket ${socket.id} left room ${roomName}`);
 
@@ -122,13 +199,33 @@ const handleConnection = (io, socket) => {
     });
   });
 
+  // Handle cursor position updates
+  socket.on('cursor:move', (data) => {
+    const { boardId, x, y } = data;
+    if (!boardId || typeof x !== 'number' || typeof y !== 'number') return;
+
+    const roomName = `board:${boardId}`;
+
+    // Broadcast cursor position to others in the room
+    socket.to(roomName).emit('cursor:updated', {
+      userId: socket.user._id.toString(),
+      username: socket.user.username,
+      avatarUrl: socket.user.avatarUrl,
+      x,
+      y,
+    });
+  });
+
   // Handle disconnect
   socket.on('disconnect', (reason) => {
     logger.debug(`Socket disconnected: ${socket.id} (reason: ${reason})`);
 
-    // Notify all board rooms the user was in
+    // Get all board rooms the user was in and clean up
     const rooms = Array.from(socket.rooms).filter((room) => room.startsWith('board:'));
     for (const room of rooms) {
+      const boardId = room.replace('board:', '');
+      removeActiveUser(boardId, socket.id);
+
       io.to(room).emit('board:user-left', {
         userId: socket.user._id.toString(),
         username: socket.user.username,
