@@ -74,7 +74,7 @@ describe('CardListItem', () => {
         />,
       );
       expect(screen.getByLabelText('1 assigned members')).toBeInTheDocument();
-      expect(screen.getByText('A')).toBeInTheDocument(); // Alice's initial
+      expect(screen.getByText('AL')).toBeInTheDocument(); // Alice's initials
     });
 
     it('shows avatar image for assigned member with avatar URL', () => {
@@ -89,7 +89,7 @@ describe('CardListItem', () => {
           boardMembers={boardMembers}
         />,
       );
-      const avatar = screen.getByAltText('Bob');
+      const avatar = screen.getByAltText("Bob's avatar");
       expect(avatar).toBeInTheDocument();
       expect(avatar).toHaveAttribute('src', 'https://example.com/bob.jpg');
     });
@@ -107,9 +107,9 @@ describe('CardListItem', () => {
         />,
       );
       expect(screen.getByLabelText('3 assigned members')).toBeInTheDocument();
-      expect(screen.getByText('A')).toBeInTheDocument(); // Alice
-      expect(screen.getByAltText('Bob')).toBeInTheDocument();
-      expect(screen.getByText('C')).toBeInTheDocument(); // Charlie
+      expect(screen.getByText('AL')).toBeInTheDocument(); // Alice
+      expect(screen.getByAltText("Bob's avatar")).toBeInTheDocument();
+      expect(screen.getByText('CH')).toBeInTheDocument(); // Charlie
     });
 
     it('shows +N indicator when more than 5 members assigned', () => {

@@ -1,68 +1,7 @@
 import PropTypes from 'prop-types';
 import { useMemo } from 'react';
 
-const getInitials = (name) => {
-  if (!name) return '?';
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
-  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
-};
-
-const AvatarColors = [
-  'bg-blue-500',
-  'bg-green-500',
-  'bg-purple-500',
-  'bg-orange-500',
-  'bg-pink-500',
-  'bg-teal-500',
-  'bg-indigo-500',
-  'bg-rose-500',
-];
-
-const getAvatarColor = (id) => {
-  if (!id) return AvatarColors[0];
-  let hash = 0;
-  for (let i = 0; i < id.length; i++) {
-    hash = id.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return AvatarColors[Math.abs(hash) % AvatarColors.length];
-};
-
-const MemberAvatar = ({ member, size = 'sm' }) => {
-  const sizeClasses = size === 'sm' ? 'h-6 w-6 text-[10px]' : 'h-8 w-8 text-xs';
-
-  if (member?.avatarUrl) {
-    return (
-      <img
-        src={member.avatarUrl}
-        alt={member.username || 'Member'}
-        className={`${sizeClasses} rounded-full object-cover ring-2 ring-white/20`}
-      />
-    );
-  }
-
-  const initials = getInitials(member?.username || member?.email);
-  const colorClass = getAvatarColor(member?.id);
-
-  return (
-    <div
-      className={`${sizeClasses} ${colorClass} flex items-center justify-center rounded-full font-medium text-white ring-2 ring-white/20`}
-      title={member?.username || member?.email || 'Member'}
-    >
-      {initials}
-    </div>
-  );
-};
-
-MemberAvatar.propTypes = {
-  member: PropTypes.shape({
-    id: PropTypes.string,
-    username: PropTypes.string,
-    email: PropTypes.string,
-    avatarUrl: PropTypes.string,
-  }),
-  size: PropTypes.oneOf(['sm', 'md']),
-};
+import UserAvatar from '../common/UserAvatar.jsx';
 
 const CardListItem = ({ card, onOpenDetail, boardMembers = [] }) => {
   const assignedMembersData = useMemo(() => {
@@ -70,7 +9,7 @@ const CardListItem = ({ card, onOpenDetail, boardMembers = [] }) => {
     const memberMap = new Map(boardMembers.map((m) => [m.id, m]));
     return card.assignedMembers
       .map((id) => memberMap.get(id) || { id, username: null })
-      .slice(0, 5); // Show max 5 avatars
+      .slice(0, 5);
   }, [card.assignedMembers, boardMembers]);
 
   const extraCount = (card.assignedMembers?.length || 0) - 5;
@@ -107,7 +46,13 @@ const CardListItem = ({ card, onOpenDetail, boardMembers = [] }) => {
             aria-label={`${card.assignedMembers.length} assigned members`}
           >
             {assignedMembersData.map((member) => (
-              <MemberAvatar key={member.id} member={member} size="sm" />
+              <UserAvatar
+                key={member.id}
+                user={member}
+                size="sm"
+                showTooltip
+                ringColor="ring-white/20"
+              />
             ))}
             {extraCount > 0 && (
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-600 text-[10px] font-medium text-white ring-2 ring-white/20">

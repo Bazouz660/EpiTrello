@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import UserAvatar from '../common/UserAvatar';
 
 import MentionTextarea, { renderTextWithMentions } from '../MentionTextarea.jsx';
 
@@ -626,9 +627,14 @@ const CardDetailModal = ({
                           className="rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200/60"
                         >
                           <div className="mb-1 flex items-center gap-2">
-                            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-xs font-bold text-white">
-                              {(resolveMemberLabel(comment.author)?.[0] || '?').toUpperCase()}
-                            </div>
+                            <UserAvatar
+                              user={{
+                                id: comment.author,
+                                username: resolveMemberLabel(comment.author) || 'Unknown',
+                              }}
+                              size="sm"
+                              showTooltip={false}
+                            />
                             <div>
                               <p className="text-sm font-medium text-slate-900">
                                 {resolveMemberLabel(comment.author)}
@@ -848,9 +854,14 @@ const CardDetailModal = ({
                           key={member.id}
                           className="flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1"
                         >
-                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-[10px] font-bold text-white">
-                            {(member.label?.[0] || '?').toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            user={{
+                              id: member.id,
+                              username: member.label || 'Unknown',
+                            }}
+                            size="xs"
+                            showTooltip={false}
+                          />
                           <span className="text-xs font-medium text-slate-700">{member.label}</span>
                         </div>
                       ))}
