@@ -22,7 +22,7 @@ describe('ActiveUserAvatar', () => {
       avatarUrl: 'https://example.com/avatar.jpg',
     };
     render(<ActiveUserAvatar user={userWithAvatar} />);
-    const img = screen.getByAltText('John Doe');
+    const img = screen.getByAltText("John Doe's avatar");
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', 'https://example.com/avatar.jpg');
   });
