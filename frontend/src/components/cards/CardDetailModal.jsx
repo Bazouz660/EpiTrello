@@ -1,7 +1,8 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import MentionTextarea, { renderTextWithMentions } from '../MentionTextarea.jsx';
+import renderTextWithMentions from '../../utils/renderTextWithMentions.jsx';
+import MentionTextarea from '../MentionTextarea.jsx';
 
 const formatDateTime = (value) => {
   if (!value) return null;
