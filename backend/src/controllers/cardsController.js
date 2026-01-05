@@ -6,6 +6,11 @@ import { List } from '../models/List.js';
 import { broadcastToBoard } from '../socket/index.js';
 
 import { canView, canEdit } from './boardsController.js';
+import {
+  createNotifications,
+  extractMentions,
+  resolveUsernames,
+} from './notificationsController.js';
 
 const { Types } = mongoose;
 
@@ -67,10 +72,8 @@ export const createCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Only members or higher can create cards (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
-    // compute position if not provided
     let pos = position;
     if (pos === undefined || pos === null) {
       const max = await Card.find({ list: listId }).sort({ position: -1 }).limit(1).lean();
@@ -86,7 +89,6 @@ export const createCard = async (req, res, next) => {
     });
     await card.save();
 
-    // Broadcast to other board members
     broadcastToBoard(board._id.toString(), 'card:created', {
       card: toResponse(card),
       listId,
@@ -109,7 +111,6 @@ export const listCards = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Any role can view cards
     if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const cards = await Card.find({ list: listId }).sort({ position: 1 });
@@ -129,7 +130,6 @@ export const getCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Any role can view a card
     if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     return res.status(200).json({ card: toResponse(card) });
@@ -150,10 +150,10 @@ export const updateCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Only members or higher can update cards (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
-    // allow moving to another list
+    const previousAssignedMembers = (card.assignedMembers || []).map((m) => m.toString());
+
     if (updates.list && updates.list !== card.list.toString()) {
       const newList = await List.findById(updates.list);
       if (!newList) return res.status(404).json({ message: 'Target list not found' });
@@ -221,7 +221,24 @@ export const updateCard = async (req, res, next) => {
 
     await card.save();
 
-    // Broadcast to other board members
+    if (updates.assignedMembers) {
+      const newAssignedMembers = updates.assignedMembers.filter(
+        (memberId) => !previousAssignedMembers.includes(memberId),
+      );
+
+      if (newAssignedMembers.length > 0) {
+        await createNotifications({
+          recipientIds: newAssignedMembers,
+          type: 'card_assigned',
+          title: 'You were assigned to a card',
+          message: `You were assigned to "${card.title}"`,
+          boardId: board._id,
+          cardId: card._id,
+          actorId: req.user._id,
+        });
+      }
+    }
+
     broadcastToBoard(board._id.toString(), 'card:updated', {
       card: toResponse(card),
       userId: req.user._id.toString(),
@@ -244,7 +261,6 @@ export const deleteCard = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Only members or higher can delete cards (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const cardId = card._id.toString();
@@ -253,7 +269,6 @@ export const deleteCard = async (req, res, next) => {
 
     await card.deleteOne();
 
-    // Broadcast to other board members
     broadcastToBoard(boardId, 'card:deleted', {
       cardId,
       listId,
@@ -278,7 +293,6 @@ export const moveCard = async (req, res, next) => {
     if (!sourceList) return res.status(404).json({ message: 'Source list not found' });
 
     const sourceBoard = await Board.findById(sourceList.board);
-    // Only members or higher can move cards (viewers cannot)
     if (!canEdit(sourceBoard, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
@@ -294,10 +308,8 @@ export const moveCard = async (req, res, next) => {
     const originalListId = card.list.toString();
     const sameList = originalListId === targetListId;
 
-    // Step 1: Move ALL affected cards to negative positions to avoid unique constraint conflicts
     const moveToNegativeBulkOps = [];
 
-    // Move the dragged card to negative position and update its list
     moveToNegativeBulkOps.push({
       updateOne: {
         filter: { _id: id },
@@ -305,7 +317,6 @@ export const moveCard = async (req, res, next) => {
       },
     });
 
-    // Move source list cards to negative positions (for cross-list moves)
     if (!sameList && sourceListCardIds && Array.isArray(sourceListCardIds)) {
       sourceListCardIds.forEach((cardId, index) => {
         if (cardId !== id) {
@@ -319,7 +330,6 @@ export const moveCard = async (req, res, next) => {
       });
     }
 
-    // Move target list cards to negative positions
     if (targetListCardIds && Array.isArray(targetListCardIds)) {
       targetListCardIds.forEach((cardId, index) => {
         if (cardId !== id) {
@@ -335,10 +345,8 @@ export const moveCard = async (req, res, next) => {
 
     await Card.bulkWrite(moveToNegativeBulkOps, { ordered: false });
 
-    // Step 2: Set all cards to their final positions
     const setFinalPositionBulkOps = [];
 
-    // Set source list cards to final positions
     if (!sameList && sourceListCardIds && Array.isArray(sourceListCardIds)) {
       sourceListCardIds.forEach((cardId, index) => {
         if (cardId !== id) {
@@ -352,7 +360,6 @@ export const moveCard = async (req, res, next) => {
       });
     }
 
-    // Set target list cards to final positions
     if (targetListCardIds && Array.isArray(targetListCardIds)) {
       targetListCardIds.forEach((cardId, index) => {
         if (cardId !== id) {
@@ -365,8 +372,6 @@ export const moveCard = async (req, res, next) => {
         }
       });
     }
-
-    // Set the moved card's final position
     setFinalPositionBulkOps.push({
       updateOne: {
         filter: { _id: id },
@@ -376,7 +381,6 @@ export const moveCard = async (req, res, next) => {
 
     await Card.bulkWrite(setFinalPositionBulkOps, { ordered: false });
 
-    // Step 3: Add activity entry
     const activityEntry = !sameList
       ? buildActivityEntry(
           `Moved from "${sourceList.title}" to "${targetList.title}"`,
@@ -390,7 +394,6 @@ export const moveCard = async (req, res, next) => {
       { new: true },
     );
 
-    // Broadcast to other board members
     broadcastToBoard(sourceBoard._id.toString(), 'card:moved', {
       card: toResponse(updatedCard),
       sourceListId: originalListId,
@@ -403,6 +406,79 @@ export const moveCard = async (req, res, next) => {
     return res.status(200).json({ card: toResponse(updatedCard) });
   } catch (error) {
     if (error.code === 11000) return res.status(409).json({ message: 'Position conflict' });
+    next(error);
+  }
+};
+
+export const addComment = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { text } = req.body;
+
+    if (!text || !text.trim()) {
+      return res.status(400).json({ message: 'Comment text is required' });
+    }
+
+    const card = await Card.findById(id);
+    if (!card) return res.status(404).json({ message: 'Card not found' });
+
+    const list = await List.findById(card.list);
+    if (!list) return res.status(404).json({ message: 'List not found' });
+
+    const board = await Board.findById(list.board);
+    if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
+
+    const comment = {
+      id: new Types.ObjectId().toString(),
+      text: text.trim(),
+      author: req.user._id,
+      createdAt: new Date(),
+    };
+
+    card.comments.push(comment);
+    card.activity.push(buildActivityEntry('Comment added', req.user._id));
+    await card.save();
+
+    const assignedMemberIds = (card.assignedMembers || []).map((m) => m.toString());
+    if (assignedMemberIds.length > 0) {
+      await createNotifications({
+        recipientIds: assignedMemberIds,
+        type: 'comment',
+        title: 'New comment on your card',
+        message: `${req.user.username} commented on "${card.title}"`,
+        boardId: board._id,
+        cardId: card._id,
+        actorId: req.user._id,
+      });
+    }
+
+    const mentionedUsernames = extractMentions(text);
+    if (mentionedUsernames.length > 0) {
+      const mentionedUsers = await resolveUsernames(mentionedUsernames);
+      const mentionedUserIds = mentionedUsers
+        .map((u) => u.id)
+        .filter((uid) => !assignedMemberIds.includes(uid));
+
+      if (mentionedUserIds.length > 0) {
+        await createNotifications({
+          recipientIds: mentionedUserIds,
+          type: 'mention',
+          title: 'You were mentioned',
+          message: `${req.user.username} mentioned you in "${card.title}"`,
+          boardId: board._id,
+          cardId: card._id,
+          actorId: req.user._id,
+        });
+      }
+    }
+
+    broadcastToBoard(board._id.toString(), 'card:updated', {
+      card: toResponse(card),
+      userId: req.user._id.toString(),
+    });
+
+    return res.status(201).json({ card: toResponse(card), comment: mapComment(comment) });
+  } catch (error) {
     next(error);
   }
 };

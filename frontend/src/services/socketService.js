@@ -129,6 +129,18 @@ export const leaveBoard = (boardId) => {
 };
 
 /**
+ * Send cursor position update to the board
+ * @param {string} boardId - The board ID
+ * @param {number} x - X coordinate (percentage 0-100)
+ * @param {number} y - Y coordinate (percentage 0-100)
+ */
+export const sendCursorPosition = (boardId, x, y) => {
+  if (socket?.connected && boardId) {
+    socket.emit('cursor:move', { boardId, x, y });
+  }
+};
+
+/**
  * Subscribe to a socket event
  * @param {string} event - Event name
  * @param {Function} callback - Event handler
@@ -164,6 +176,7 @@ export default {
   isConnected,
   joinBoard,
   leaveBoard,
+  sendCursorPosition,
   subscribe,
   subscribeToEvents,
 };

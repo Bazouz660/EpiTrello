@@ -20,7 +20,9 @@ import {
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
+import ActiveUsersDisplay from '../components/boards/ActiveUsersDisplay.jsx';
 import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
+import UserCursorsOverlay from '../components/boards/UserCursorsOverlay.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
 import ConnectionStatus from '../components/ConnectionStatus.jsx';
@@ -102,9 +104,41 @@ const BoardViewPage = () => {
   const listTitleInputRef = useRef(null);
   // Track card order during drag to sync with dnd-kit's visual state
   const dragCardOrderRef = useRef(null);
+  // Ref for tracking cursor position in the board area
+  const boardAreaRef = useRef(null);
 
   // Real-time WebSocket connection
-  const { status: socketStatus } = useBoardSocket(boardId, authState.token);
+  const {
+    status: socketStatus,
+    onlineUsers,
+    cursorPositions,
+    updateCursorPosition,
+  } = useBoardSocket(boardId, authState.token);
+
+  // Throttle cursor updates to reduce network traffic
+  const lastCursorUpdateRef = useRef(0);
+  const CURSOR_UPDATE_THROTTLE = 50; // ms
+
+  const handleMouseMove = useCallback(
+    (event) => {
+      const now = Date.now();
+      if (now - lastCursorUpdateRef.current < CURSOR_UPDATE_THROTTLE) return;
+      lastCursorUpdateRef.current = now;
+
+      if (!boardAreaRef.current || !updateCursorPosition) return;
+
+      const rect = boardAreaRef.current.getBoundingClientRect();
+      const x = ((event.clientX - rect.left) / rect.width) * 100;
+      const y = ((event.clientY - rect.top) / rect.height) * 100;
+
+      // Only send if within bounds
+      if (x >= 0 && x <= 100 && y >= 0 && y <= 100) {
+        updateCursorPosition(x, y);
+      }
+    },
+    [updateCursorPosition],
+  );
+
   // Custom collision detection that handles lists and cards appropriately
   const collisionDetectionStrategy = useCallback(
     (args) => {
@@ -730,10 +764,16 @@ const BoardViewPage = () => {
 
   return (
     <section
+      ref={boardAreaRef}
       className="relative -mx-6 -my-8 h-[calc(100vh-73px)] overflow-hidden"
       style={boardBackgroundStyle}
+      onMouseMove={handleMouseMove}
     >
       <div className="absolute inset-0 bg-slate-900/60" />
+
+      {/* Other users' cursors overlay */}
+      <UserCursorsOverlay cursorPositions={cursorPositions} currentUserId={currentUserId} />
+
       <div className="relative z-10 flex h-full flex-col p-6 pb-0">
         <div className="mx-auto mb-6 flex w-full max-w-6xl flex-shrink-0 flex-wrap items-center justify-between gap-3 text-white">
           <div>
@@ -746,6 +786,17 @@ const BoardViewPage = () => {
             <h1 className="text-3xl font-semibold text-white">{board.title}</h1>
             {board.description && <p className="text-sm text-slate-100">{board.description}</p>}
           </div>
+
+          {/* Active users display */}
+          <div className="flex items-center gap-4">
+            <ActiveUsersDisplay
+              users={onlineUsers}
+              currentUserId={currentUserId}
+              maxVisible={5}
+              size="md"
+            />
+          </div>
+
           <div className="flex flex-wrap gap-3">
             <button
               type="button"

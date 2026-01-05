@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 
+import NotificationBell from './components/notifications/NotificationBell.jsx';
 import { initializeAuth, logout, selectAuth } from './features/auth/authSlice.js';
 import { useAppDispatch, useAppSelector } from './hooks/index.js';
 
@@ -83,6 +84,7 @@ const AppLayout = () => {
               )}
               {initialized && user && (
                 <>
+                  <NotificationBell />
                   <span className="hidden text-sm text-slate-600 sm:inline">
                     Signed in as <span className="font-medium text-slate-900">{user.username}</span>
                   </span>
