@@ -1,9 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import ActiveUsersDisplay, { UserAvatar } from './ActiveUsersDisplay.jsx';
+import ActiveUsersDisplay, { ActiveUserAvatar } from './ActiveUsersDisplay.jsx';
 
-describe('UserAvatar', () => {
+describe('ActiveUserAvatar', () => {
   const mockUser = {
     userId: 'user-1',
     username: 'John Doe',
@@ -11,7 +11,7 @@ describe('UserAvatar', () => {
   };
 
   it('renders initials when no avatar URL is provided', () => {
-    render(<UserAvatar user={mockUser} />);
+    render(<ActiveUserAvatar user={mockUser} />);
     // First letter of first name + first letter of last name
     expect(screen.getByText('JD')).toBeInTheDocument();
   });
@@ -21,14 +21,14 @@ describe('UserAvatar', () => {
       ...mockUser,
       avatarUrl: 'https://example.com/avatar.jpg',
     };
-    render(<UserAvatar user={userWithAvatar} />);
-    const img = screen.getByAltText('John Doe');
+    render(<ActiveUserAvatar user={userWithAvatar} />);
+    const img = screen.getByAltText("John Doe's avatar");
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', 'https://example.com/avatar.jpg');
   });
 
   it('shows tooltip on hover', async () => {
-    render(<UserAvatar user={mockUser} showTooltip={true} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={true} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -37,7 +37,7 @@ describe('UserAvatar', () => {
   });
 
   it('hides tooltip on mouse leave', () => {
-    render(<UserAvatar user={mockUser} showTooltip={true} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={true} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -48,7 +48,7 @@ describe('UserAvatar', () => {
   });
 
   it('does not show tooltip when showTooltip is false', () => {
-    render(<UserAvatar user={mockUser} showTooltip={false} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={false} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -58,15 +58,15 @@ describe('UserAvatar', () => {
   });
 
   it('applies correct size classes', () => {
-    const { rerender } = render(<UserAvatar user={mockUser} size="sm" />);
+    const { rerender } = render(<ActiveUserAvatar user={mockUser} size="sm" />);
     expect(screen.getByText('JD')).toHaveClass('w-6', 'h-6');
 
-    rerender(<UserAvatar user={mockUser} size="lg" />);
+    rerender(<ActiveUserAvatar user={mockUser} size="lg" />);
     expect(screen.getByText('JD')).toHaveClass('w-10', 'h-10');
   });
 
   it('shows online indicator', () => {
-    render(<UserAvatar user={mockUser} />);
+    render(<ActiveUserAvatar user={mockUser} />);
     // Online indicator should be present (green dot)
     const onlineIndicator = document.querySelector('.bg-green-400');
     expect(onlineIndicator).toBeInTheDocument();
@@ -74,18 +74,18 @@ describe('UserAvatar', () => {
 
   it('renders two-letter initials for single word username', () => {
     const singleNameUser = { userId: 'user-2', username: 'Alice', avatarUrl: null };
-    render(<UserAvatar user={singleNameUser} />);
+    render(<ActiveUserAvatar user={singleNameUser} />);
     expect(screen.getByText('AL')).toBeInTheDocument();
   });
 
   it('handles empty or missing username gracefully', () => {
     const emptyNameUser = { userId: 'user-3', username: '', avatarUrl: null };
-    render(<UserAvatar user={emptyNameUser} />);
+    render(<ActiveUserAvatar user={emptyNameUser} />);
     expect(screen.getByText('?')).toBeInTheDocument();
   });
 
   it('applies custom className', () => {
-    const { container } = render(<UserAvatar user={mockUser} className="custom-class" />);
+    const { container } = render(<ActiveUserAvatar user={mockUser} className="custom-class" />);
     expect(container.firstChild).toHaveClass('custom-class');
   });
 });

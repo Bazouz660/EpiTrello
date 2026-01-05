@@ -115,6 +115,11 @@ const authenticateSocket = async (socket, next) => {
 const handleConnection = (io, socket) => {
   logger.debug(`Socket connected: ${socket.id} (user: ${socket.user?.username})`);
 
+  // Join user's personal notification room
+  const userRoom = `user:${socket.user._id.toString()}`;
+  socket.join(userRoom);
+  logger.debug(`Socket ${socket.id} joined personal room ${userRoom}`);
+
   // Join a board room
   socket.on('board:join', async (boardId) => {
     try {
@@ -291,9 +296,27 @@ export const emitToBoard = (boardId, event, data) => {
   logger.debug(`Emit ${event} to ${roomName}`);
 };
 
+/**
+ * Broadcast an event to a specific user's personal room
+ * @param {string} userId - The user ID
+ * @param {string} event - The event name
+ * @param {object} data - The event data
+ */
+export const broadcastToUser = (userId, event, data) => {
+  if (!ioInstance) {
+    logger.warn('Socket.IO not initialized, cannot broadcast to user');
+    return;
+  }
+
+  const roomName = `user:${userId}`;
+  ioInstance.to(roomName).emit(event, data);
+  logger.debug(`Broadcast ${event} to user ${userId}`);
+};
+
 export default {
   initializeSocket,
   getIO,
   broadcastToBoard,
   emitToBoard,
+  broadcastToUser,
 };

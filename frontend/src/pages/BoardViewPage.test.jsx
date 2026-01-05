@@ -250,7 +250,7 @@ describe('BoardViewPage', () => {
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByText('Add lint step')).toBeInTheDocument();
     expect(screen.getByText('Dev')).toBeInTheDocument();
-    expect(screen.getAllByText('Member · mem-1').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText('member1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Great work')).toBeInTheDocument();
 
     await user.click(screen.getByLabelText('Close'));
@@ -281,7 +281,7 @@ describe('BoardViewPage', () => {
     const secondLabelInput = screen.getByLabelText('Label 2 text');
     await user.type(secondLabelInput, 'Docs');
 
-    await user.click(screen.getByLabelText('Board owner'));
+    await user.click(screen.getByLabelText('testuser'));
 
     await user.click(screen.getByRole('button', { name: 'Add item' }));
     const checklistInput = screen.getByLabelText('Checklist item 3');
