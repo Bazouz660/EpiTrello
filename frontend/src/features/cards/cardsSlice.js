@@ -27,6 +27,9 @@ const buildInitialState = () => ({
   deletingId: null,
   moveStatus: 'idle',
   moveError: null,
+  addCommentStatus: 'idle',
+  addCommentError: null,
+  addingCommentCardId: null,
 });
 
 const initialState = buildInitialState();
@@ -97,6 +100,18 @@ export const moveCard = createAsyncThunk(
         sourceListCardIds,
         targetListCardIds,
       });
+      return data.card;
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
+export const addComment = createAsyncThunk(
+  'cards/addComment',
+  async ({ cardId, text }, { rejectWithValue }) => {
+    try {
+      const { data } = await httpClient.post(`/cards/${cardId}/comments`, { text });
       return data.card;
     } catch (error) {
       return rejectWithValue(extractErrorMessage(error));
@@ -321,6 +336,23 @@ const cardsSlice = createSlice({
         state.moveStatus = 'failed';
         state.moveError = action.payload ?? 'Failed to move card';
         // Revert will be handled by refetching
+      })
+      .addCase(addComment.pending, (state, action) => {
+        state.addCommentStatus = 'loading';
+        state.addCommentError = null;
+        state.addingCommentCardId = action.meta.arg.cardId;
+      })
+      .addCase(addComment.fulfilled, (state, action) => {
+        state.addCommentStatus = 'succeeded';
+        state.addCommentError = null;
+        const card = action.payload;
+        state.entities[card.id] = card;
+        state.addingCommentCardId = null;
+      })
+      .addCase(addComment.rejected, (state, action) => {
+        state.addCommentStatus = 'failed';
+        state.addingCommentCardId = null;
+        state.addCommentError = action.payload ?? action.error?.message ?? 'Failed to add comment';
       })
       .addCase(clearSession, () => buildInitialState());
   },

@@ -39,6 +39,7 @@ import {
   clearMemberErrors,
 } from '../features/boards/boardsSlice.js';
 import {
+  addComment,
   createCard,
   deleteCard,
   fetchCardsByList,
@@ -286,6 +287,20 @@ const BoardViewPage = () => {
     !board && (boardsState.selectedStatus === 'idle' || boardsState.selectedStatus === 'loading');
 
   const boardMembersList = useMemo(() => {
+    // Use boardsState.members as the primary source (has username from API)
+    // Fall back to board.members if needed
+    if (boardsState.members && boardsState.members.length > 0) {
+      return boardsState.members.map((member) => ({
+        id: member.id,
+        username: member.username,
+        displayName: member.username || member.email || 'Member',
+        email: member.email,
+        role: member.role ?? 'member',
+        avatarUrl: member.avatarUrl,
+      }));
+    }
+
+    // Fallback to board.members if boardsState.members not loaded yet
     if (!board) return [];
     const members = Array.isArray(board.members) ? board.members : [];
     const normalized = members
@@ -293,13 +308,13 @@ const BoardViewPage = () => {
       .map((member) => ({
         id: member.user,
         role: member.role ?? 'member',
-        displayName: member.displayName ?? null,
+        displayName: member.displayName ?? 'Member',
       }));
     if (board.owner && !normalized.some((member) => member.id === board.owner)) {
       normalized.unshift({ id: board.owner, role: 'owner', displayName: 'Board owner' });
     }
     return normalized;
-  }, [board]);
+  }, [board, boardsState.members]);
 
   const listsStatus = listsState.fetchStatusByBoard[boardId] ?? 'idle';
   const listsError = listsState.fetchErrorByBoard[boardId] ?? null;
@@ -1225,6 +1240,16 @@ const BoardViewPage = () => {
           onDelete={() => handleDeleteCard(activeCard.id)}
           isDeleting={isDeletingActiveCard}
           deleteError={activeCardDeleteError}
+          onAddComment={(text) => dispatch(addComment({ cardId: activeCard.id, text })).unwrap()}
+          isAddingComment={
+            cardsState.addCommentStatus === 'loading' &&
+            cardsState.addingCommentCardId === activeCard.id
+          }
+          addCommentError={
+            cardsState.addCommentError && cardsState.addingCommentCardId === activeCard.id
+              ? cardsState.addCommentError
+              : null
+          }
           readOnly={!canEdit}
         />
       )}
