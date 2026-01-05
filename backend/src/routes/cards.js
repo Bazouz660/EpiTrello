@@ -7,6 +7,7 @@ import {
   updateCard,
   deleteCard,
   moveCard,
+  addComment,
 } from '../controllers/cardsController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -17,6 +18,7 @@ router.use(authenticate);
 router.post('/', createCard);
 router.get('/', listCards);
 router.post('/:id/move', moveCard);
+router.post('/:id/comments', addComment);
 router.get('/:id', getCard);
 router.patch('/:id', updateCard);
 router.delete('/:id', deleteCard);

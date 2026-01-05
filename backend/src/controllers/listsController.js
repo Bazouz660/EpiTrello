@@ -1,6 +1,7 @@
 import { Board } from '../models/Board.js';
 import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
+import { broadcastToBoard } from '../socket/index.js';
 
 import { canView, canEdit } from './boardsController.js';
 
@@ -19,10 +20,8 @@ export const createList = async (req, res, next) => {
       return res.status(400).json({ message: 'title and board are required' });
 
     const board = await Board.findById(boardId);
-    // Only members or higher can create lists (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
-    // Determine position: if not provided, append at end
     let pos = position;
     if (pos === undefined || pos === null) {
       const max = await List.find({ board: boardId }).sort({ position: -1 }).limit(1).lean();
@@ -31,6 +30,11 @@ export const createList = async (req, res, next) => {
 
     const list = new List({ title, board: boardId, position: pos });
     await list.save();
+
+    broadcastToBoard(boardId, 'list:created', {
+      list: toResponse(list),
+      userId: req.user._id.toString(),
+    });
 
     return res.status(201).json({ list: toResponse(list) });
   } catch (error) {
@@ -47,7 +51,6 @@ export const listLists = async (req, res, next) => {
     if (!boardId) return res.status(400).json({ message: 'board query parameter is required' });
 
     const board = await Board.findById(boardId);
-    // Any role can view lists
     if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const lists = await List.find({ board: boardId }).sort({ position: 1 });
@@ -64,7 +67,6 @@ export const getList = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Any role can view a list
     if (!canView(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     return res.status(200).json({ list: toResponse(list) });
@@ -82,7 +84,6 @@ export const updateList = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Only members or higher can update lists (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     if (title !== undefined) list.title = title;
@@ -90,6 +91,11 @@ export const updateList = async (req, res, next) => {
     if (position !== undefined) list.position = position;
 
     await list.save();
+
+    broadcastToBoard(list.board.toString(), 'list:updated', {
+      list: toResponse(list),
+      userId: req.user._id.toString(),
+    });
 
     return res.status(200).json({ list: toResponse(list) });
   } catch (error) {
@@ -105,12 +111,19 @@ export const deleteList = async (req, res, next) => {
     if (!list) return res.status(404).json({ message: 'List not found' });
 
     const board = await Board.findById(list.board);
-    // Only members or higher can delete lists (viewers cannot)
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
-    // remove cards in this list
+    const boardId = list.board.toString();
+    const listId = list._id.toString();
+
     await Card.deleteMany({ list: list._id });
     await list.deleteOne();
+
+    broadcastToBoard(boardId, 'list:deleted', {
+      listId,
+      boardId,
+      userId: req.user._id.toString(),
+    });
 
     return res.status(204).send();
   } catch (error) {
@@ -126,13 +139,10 @@ export const reorderLists = async (req, res, next) => {
     }
 
     const board = await Board.findById(boardId);
-    // Only members or higher can reorder lists (viewers cannot)
     if (!canEdit(board, req.user._id)) {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    // Two-phase update to avoid unique constraint violations:
-    // Phase 1: Set all positions to temporary negative values
     const tempBulkOps = listIds.map((listId, index) => ({
       updateOne: {
         filter: { _id: listId, board: boardId },
@@ -141,7 +151,6 @@ export const reorderLists = async (req, res, next) => {
     }));
     await List.bulkWrite(tempBulkOps, { ordered: false });
 
-    // Phase 2: Set final positions
     const finalBulkOps = listIds.map((listId, index) => ({
       updateOne: {
         filter: { _id: listId, board: boardId },
@@ -150,8 +159,14 @@ export const reorderLists = async (req, res, next) => {
     }));
     await List.bulkWrite(finalBulkOps, { ordered: false });
 
-    // Fetch updated lists
     const lists = await List.find({ board: boardId }).sort({ position: 1 });
+
+    broadcastToBoard(boardId, 'lists:reordered', {
+      boardId,
+      lists: lists.map(toResponse),
+      userId: req.user._id.toString(),
+    });
+
     return res.status(200).json({ lists: lists.map(toResponse) });
   } catch (error) {
     next(error);

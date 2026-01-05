@@ -114,6 +114,44 @@ const listsSlice = createSlice({
         }
       });
     },
+    // Real-time sync actions
+    listCreatedFromSocket: (state, action) => {
+      const { list } = action.payload;
+      state.entities[list.id] = list;
+      if (!state.idsByBoard[list.board]) {
+        state.idsByBoard[list.board] = [];
+      }
+      if (!state.idsByBoard[list.board].includes(list.id)) {
+        state.idsByBoard[list.board] = sortIdsByPosition(
+          [...state.idsByBoard[list.board], list.id],
+          state.entities,
+        );
+      }
+    },
+    listUpdatedFromSocket: (state, action) => {
+      const { list } = action.payload;
+      state.entities[list.id] = list;
+      if (list.board && state.idsByBoard[list.board]) {
+        state.idsByBoard[list.board] = sortIdsByPosition(
+          state.idsByBoard[list.board],
+          state.entities,
+        );
+      }
+    },
+    listDeletedFromSocket: (state, action) => {
+      const { listId, boardId } = action.payload;
+      delete state.entities[listId];
+      if (boardId && state.idsByBoard[boardId]) {
+        state.idsByBoard[boardId] = state.idsByBoard[boardId].filter((id) => id !== listId);
+      }
+    },
+    listsReorderedFromSocket: (state, action) => {
+      const { boardId, lists } = action.payload;
+      state.idsByBoard[boardId] = lists.map((list) => list.id);
+      lists.forEach((list) => {
+        state.entities[list.id] = list;
+      });
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -226,7 +264,14 @@ const listsSlice = createSlice({
 });
 
 export const listsReducer = listsSlice.reducer;
-export const { clearListsState, optimisticReorderLists } = listsSlice.actions;
+export const {
+  clearListsState,
+  optimisticReorderLists,
+  listCreatedFromSocket,
+  listUpdatedFromSocket,
+  listDeletedFromSocket,
+  listsReorderedFromSocket,
+} = listsSlice.actions;
 export const selectLists = (state) => state.lists;
 export const createListsInitialState = () => buildInitialState();
 

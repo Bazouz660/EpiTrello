@@ -11,6 +11,7 @@ import authRoutes from './routes/auth.js';
 import boardsRoutes from './routes/boards.js';
 import cardsRoutes from './routes/cards.js';
 import listsRoutes from './routes/lists.js';
+import notificationsRoutes from './routes/notifications.js';
 import usersRoutes from './routes/users.js';
 
 const app = express();
@@ -27,7 +28,6 @@ app.use(bodyParser.json({ limit: '1mb' }));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan(process.env.NODE_ENV === 'production' ? 'combined' : 'dev'));
 
-// Health check endpoint pour Kubernetes
 app.get('/api/health', (_req, res) => {
   res.status(200).json({
     status: 'healthy',
@@ -38,10 +38,9 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/boards', boardsRoutes);
-// Cards routes
 app.use('/api/cards', cardsRoutes);
-// Lists routes
 app.use('/api/lists', listsRoutes);
+app.use('/api/notifications', notificationsRoutes);
 app.use('/api/users', usersRoutes);
 
 app.use(notFoundHandler);
