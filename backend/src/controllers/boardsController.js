@@ -1,5 +1,9 @@
+import mongoose from 'mongoose';
+
 import { Board } from '../models/Board.js';
 import { broadcastToBoard } from '../socket/index.js';
+
+const { Types } = mongoose;
 
 const defaultBackground = { type: 'color', value: '#0f172a', thumbnail: '' };
 
@@ -20,6 +24,40 @@ const sanitizeBackground = (background = {}) => {
 
   return { type, value, thumbnail: type === 'image' ? thumbnail : '' };
 };
+
+// Activity entry builder
+const buildActivityEntry = ({
+  action,
+  entityType,
+  actorId,
+  entityId = null,
+  entityTitle = null,
+  details = null,
+}) => ({
+  id: new Types.ObjectId().toString(),
+  actor: actorId ?? null,
+  action,
+  entityType,
+  entityId,
+  entityTitle,
+  details,
+  createdAt: new Date(),
+});
+
+// Map activity entry for API response
+const mapActivityEntry = (entry = {}) => ({
+  id: entry.id ?? entry._id?.toString() ?? '',
+  actor: entry.actor ? entry.actor.toString() : null,
+  action: entry.action ?? '',
+  entityType: entry.entityType ?? '',
+  entityId: entry.entityId ?? null,
+  entityTitle: entry.entityTitle ?? null,
+  details: entry.details ?? null,
+  createdAt: entry.createdAt ?? null,
+});
+
+// Export activity helpers for use in other controllers
+export { buildActivityEntry, mapActivityEntry };
 
 const resolveMembershipRole = (board, userId) => {
   const currentUserId = userId?.toString();
@@ -101,6 +139,14 @@ export const createBoard = async (req, res, next) => {
       description,
       owner: req.user._id,
       background: sanitizeBackground(background),
+      activity: [
+        buildActivityEntry({
+          action: 'created',
+          entityType: 'board',
+          actorId: req.user._id,
+          entityTitle: title,
+        }),
+      ],
     });
     await board.save();
 
@@ -150,10 +196,42 @@ export const updateBoard = async (req, res, next) => {
       return res.status(403).json({ message: 'Forbidden' });
     }
 
-    if (title !== undefined) board.title = title;
-    if (description !== undefined) board.description = description;
-    if (background !== undefined) board.background = sanitizeBackground(background);
+    const activityEntries = [];
 
+    if (title !== undefined && title !== board.title) {
+      activityEntries.push(
+        buildActivityEntry({
+          action: 'renamed',
+          entityType: 'board',
+          actorId: req.user._id,
+          entityTitle: title,
+          details: `from "${board.title}" to "${title}"`,
+        }),
+      );
+      board.title = title;
+    }
+    if (description !== undefined && description !== board.description) {
+      activityEntries.push(
+        buildActivityEntry({
+          action: 'updated description',
+          entityType: 'board',
+          actorId: req.user._id,
+        }),
+      );
+      board.description = description;
+    }
+    if (background !== undefined) {
+      activityEntries.push(
+        buildActivityEntry({
+          action: 'changed background',
+          entityType: 'board',
+          actorId: req.user._id,
+        }),
+      );
+      board.background = sanitizeBackground(background);
+    }
+
+    activityEntries.forEach((entry) => board.activity.push(entry));
     await board.save();
 
     // Broadcast to other board members
@@ -230,7 +308,23 @@ export const addBoardMember = async (req, res, next) => {
     board.members.push({ user: userId, role });
     await board.save();
 
+    // Get member info for activity log (after save so populate works)
     const members = await getPopulatedMembers(board._id);
+    const addedMember = members.find((m) => m.id === userId);
+    const memberName = addedMember?.username || 'Unknown user';
+
+    board.activity.push(
+      buildActivityEntry({
+        action: 'added member',
+        entityType: 'member',
+        actorId: req.user._id,
+        entityId: userId,
+        entityTitle: memberName,
+        details: `as ${role}`,
+      }),
+    );
+
+    await board.save();
 
     // Broadcast to other board members
     broadcastToBoard(id, 'board:member-added', {
@@ -273,10 +367,26 @@ export const updateBoardMember = async (req, res, next) => {
       return res.status(404).json({ message: 'Member not found' });
     }
 
+    const previousRole = board.members[memberIndex].role;
     board.members[memberIndex].role = role;
-    await board.save();
 
+    // Get member info for activity log
     const members = await getPopulatedMembers(board._id);
+    const updatedMember = members.find((m) => m.id === userId);
+    const memberName = updatedMember?.username || 'Unknown user';
+
+    board.activity.push(
+      buildActivityEntry({
+        action: 'changed role',
+        entityType: 'member',
+        actorId: req.user._id,
+        entityId: userId,
+        entityTitle: memberName,
+        details: `from ${previousRole} to ${role}`,
+      }),
+    );
+
+    await board.save();
 
     // Broadcast to other board members
     broadcastToBoard(id, 'board:member-updated', {
@@ -315,7 +425,23 @@ export const removeBoardMember = async (req, res, next) => {
       return res.status(404).json({ message: 'Member not found' });
     }
 
+    // Get member info for activity log before removal
+    const membersBeforeRemoval = await getPopulatedMembers(board._id);
+    const removedMember = membersBeforeRemoval.find((m) => m.id === userId);
+    const memberName = removedMember?.username || 'Unknown user';
+
     board.members.splice(memberIndex, 1);
+
+    board.activity.push(
+      buildActivityEntry({
+        action: 'removed member',
+        entityType: 'member',
+        actorId: req.user._id,
+        entityId: userId,
+        entityTitle: memberName,
+      }),
+    );
+
     await board.save();
 
     const members = await getPopulatedMembers(board._id);
@@ -351,4 +477,49 @@ export const getBoardMembers = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+export const getBoardActivity = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { limit = 50, before } = req.query;
+
+    const board = await Board.findById(id);
+    if (!board) return res.status(404).json({ message: 'Board not found' });
+
+    // Any role can view activity
+    if (!canView(board, req.user._id)) {
+      return res.status(403).json({ message: 'Forbidden' });
+    }
+
+    let activity = (board.activity || []).map(mapActivityEntry);
+
+    // Sort by createdAt descending (most recent first)
+    activity.sort((a, b) => {
+      const aTime = new Date(a.createdAt ?? 0).getTime();
+      const bTime = new Date(b.createdAt ?? 0).getTime();
+      return bTime - aTime;
+    });
+
+    // Filter by 'before' timestamp for pagination
+    if (before) {
+      const beforeTime = new Date(before).getTime();
+      activity = activity.filter((entry) => new Date(entry.createdAt).getTime() < beforeTime);
+    }
+
+    // Limit results
+    const limitNum = Math.min(Math.max(1, parseInt(limit, 10) || 50), 100);
+    activity = activity.slice(0, limitNum);
+
+    return res.status(200).json({ activity });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Helper to add activity to a board (exported for use in other controllers)
+export const addBoardActivity = async (boardId, activityData) => {
+  const entry = buildActivityEntry(activityData);
+  await Board.findByIdAndUpdate(boardId, { $push: { activity: entry } });
+  return entry;
 };
