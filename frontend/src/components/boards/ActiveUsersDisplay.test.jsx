@@ -1,9 +1,9 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
-import ActiveUsersDisplay, { UserAvatar } from './ActiveUsersDisplay.jsx';
+import ActiveUsersDisplay, { ActiveUserAvatar } from './ActiveUsersDisplay.jsx';
 
-describe('UserAvatar', () => {
+describe('ActiveUserAvatar', () => {
   const mockUser = {
     userId: 'user-1',
     username: 'John Doe',
@@ -11,7 +11,7 @@ describe('UserAvatar', () => {
   };
 
   it('renders initials when no avatar URL is provided', () => {
-    render(<UserAvatar user={mockUser} />);
+    render(<ActiveUserAvatar user={mockUser} />);
     // First letter of first name + first letter of last name
     expect(screen.getByText('JD')).toBeInTheDocument();
   });
@@ -21,14 +21,14 @@ describe('UserAvatar', () => {
       ...mockUser,
       avatarUrl: 'https://example.com/avatar.jpg',
     };
-    render(<UserAvatar user={userWithAvatar} />);
-    const img = screen.getByAltText('John Doe');
+    render(<ActiveUserAvatar user={userWithAvatar} />);
+    const img = screen.getByAltText("John Doe's avatar");
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute('src', 'https://example.com/avatar.jpg');
   });
 
   it('shows tooltip on hover', async () => {
-    render(<UserAvatar user={mockUser} showTooltip={true} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={true} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -37,7 +37,7 @@ describe('UserAvatar', () => {
   });
 
   it('hides tooltip on mouse leave', () => {
-    render(<UserAvatar user={mockUser} showTooltip={true} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={true} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -48,7 +48,7 @@ describe('UserAvatar', () => {
   });
 
   it('does not show tooltip when showTooltip is false', () => {
-    render(<UserAvatar user={mockUser} showTooltip={false} />);
+    render(<ActiveUserAvatar user={mockUser} showTooltip={false} />);
 
     const avatar = screen.getByText('JD').parentElement;
     fireEvent.mouseEnter(avatar);
@@ -58,15 +58,15 @@ describe('UserAvatar', () => {
   });
 
   it('applies correct size classes', () => {
-    const { rerender } = render(<UserAvatar user={mockUser} size="sm" />);
+    const { rerender } = render(<ActiveUserAvatar user={mockUser} size="sm" />);
     expect(screen.getByText('JD')).toHaveClass('w-6', 'h-6');
 
-    rerender(<UserAvatar user={mockUser} size="lg" />);
+    rerender(<ActiveUserAvatar user={mockUser} size="lg" />);
     expect(screen.getByText('JD')).toHaveClass('w-10', 'h-10');
   });
 
   it('shows online indicator', () => {
-    render(<UserAvatar user={mockUser} />);
+    render(<ActiveUserAvatar user={mockUser} />);
     // Online indicator should be present (green dot)
     const onlineIndicator = document.querySelector('.bg-green-400');
     expect(onlineIndicator).toBeInTheDocument();
@@ -74,18 +74,18 @@ describe('UserAvatar', () => {
 
   it('renders two-letter initials for single word username', () => {
     const singleNameUser = { userId: 'user-2', username: 'Alice', avatarUrl: null };
-    render(<UserAvatar user={singleNameUser} />);
+    render(<ActiveUserAvatar user={singleNameUser} />);
     expect(screen.getByText('AL')).toBeInTheDocument();
   });
 
   it('handles empty or missing username gracefully', () => {
     const emptyNameUser = { userId: 'user-3', username: '', avatarUrl: null };
-    render(<UserAvatar user={emptyNameUser} />);
+    render(<ActiveUserAvatar user={emptyNameUser} />);
     expect(screen.getByText('?')).toBeInTheDocument();
   });
 
   it('applies custom className', () => {
-    const { container } = render(<UserAvatar user={mockUser} className="custom-class" />);
+    const { container } = render(<ActiveUserAvatar user={mockUser} className="custom-class" />);
     expect(container.firstChild).toHaveClass('custom-class');
   });
 });
@@ -105,22 +105,20 @@ describe('ActiveUsersDisplay', () => {
     expect(container.firstChild).toBeNull();
   });
 
-  it('filters out current user from display', () => {
+  it('filters out current user from avatar display but includes in count', () => {
     render(<ActiveUsersDisplay users={mockUsers} currentUserId="user-1" />);
-    // Should show 5 users (excluding current user)
-    expect(screen.getByText('5 users online')).toBeInTheDocument();
+    // Should show 6 users total (including current user in count)
+    expect(screen.getByText('6 users online')).toBeInTheDocument();
   });
 
-  it('renders nothing when only current user is online', () => {
-    const { container } = render(
-      <ActiveUsersDisplay users={[mockUsers[0]]} currentUserId="user-1" />,
-    );
-    expect(container.firstChild).toBeNull();
-  });
-
-  it('shows correct count text for single user', () => {
-    render(<ActiveUsersDisplay users={mockUsers.slice(0, 2)} currentUserId="user-1" />);
+  it('shows 1 user online when only current user is online', () => {
+    render(<ActiveUsersDisplay users={[mockUsers[0]]} currentUserId="user-1" />);
     expect(screen.getByText('1 user online')).toBeInTheDocument();
+  });
+
+  it('shows correct count text for two users', () => {
+    render(<ActiveUsersDisplay users={mockUsers.slice(0, 2)} currentUserId="user-1" />);
+    expect(screen.getByText('2 users online')).toBeInTheDocument();
   });
 
   it('limits visible avatars to maxVisible prop', () => {
@@ -143,8 +141,8 @@ describe('ActiveUsersDisplay', () => {
     const overflowButton = screen.getByText('+2');
     fireEvent.click(overflowButton);
 
-    // Dropdown should show all users
-    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+    // Dropdown should show total user count
+    expect(screen.getByText('All active users (6)')).toBeInTheDocument();
     expect(screen.getByText('Diana')).toBeInTheDocument();
     expect(screen.getByText('Eve')).toBeInTheDocument();
   });
@@ -154,14 +152,14 @@ describe('ActiveUsersDisplay', () => {
 
     // Open dropdown
     fireEvent.click(screen.getByText('+2'));
-    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+    expect(screen.getByText('All active users (6)')).toBeInTheDocument();
 
     // Click backdrop
     const backdrop = screen.getByRole('button', { name: 'Close user list' });
     fireEvent.click(backdrop);
 
     // Dropdown should be closed
-    expect(screen.queryByText('All active users (5)')).not.toBeInTheDocument();
+    expect(screen.queryByText('All active users (6)')).not.toBeInTheDocument();
   });
 
   it('closes dropdown when pressing Escape key', () => {
@@ -169,14 +167,14 @@ describe('ActiveUsersDisplay', () => {
 
     // Open dropdown
     fireEvent.click(screen.getByText('+2'));
-    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+    expect(screen.getByText('All active users (6)')).toBeInTheDocument();
 
     // Press Escape on backdrop
     const backdrop = screen.getByRole('button', { name: 'Close user list' });
     fireEvent.keyDown(backdrop, { key: 'Escape' });
 
     // Dropdown should be closed
-    expect(screen.queryByText('All active users (5)')).not.toBeInTheDocument();
+    expect(screen.queryByText('All active users (6)')).not.toBeInTheDocument();
   });
 
   it('does not close dropdown for other keys', () => {
@@ -184,14 +182,14 @@ describe('ActiveUsersDisplay', () => {
 
     // Open dropdown
     fireEvent.click(screen.getByText('+2'));
-    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+    expect(screen.getByText('All active users (6)')).toBeInTheDocument();
 
     // Press another key on backdrop
     const backdrop = screen.getByRole('button', { name: 'Close user list' });
     fireEvent.keyDown(backdrop, { key: 'Enter' });
 
     // Dropdown should still be open
-    expect(screen.getByText('All active users (5)')).toBeInTheDocument();
+    expect(screen.getByText('All active users (6)')).toBeInTheDocument();
   });
 
   it('supports different sizes', () => {
@@ -216,8 +214,9 @@ describe('ActiveUsersDisplay', () => {
 
     render(<ActiveUsersDisplay users={manyUsers} currentUserId="user-0" maxVisible={5} />);
 
-    // Should show overflow of 14 - 5 = 9 users
+    // Should show overflow of 14 - 5 = 9 users (other users minus maxVisible)
     expect(screen.getByText('+9')).toBeInTheDocument();
-    expect(screen.getByText('14 users online')).toBeInTheDocument();
+    // Total count includes current user
+    expect(screen.getByText('15 users online')).toBeInTheDocument();
   });
 });

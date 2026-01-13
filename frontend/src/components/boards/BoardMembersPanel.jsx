@@ -1,6 +1,8 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import UserAvatar from '../common/UserAvatar.jsx';
+
 // ============================================================================
 // Icons
 // ============================================================================
@@ -92,50 +94,13 @@ const roleOptions = [
 // Sub-components
 // ============================================================================
 const MemberAvatar = ({ member, size = 'md' }) => {
-  const sizeClasses = {
-    sm: 'h-8 w-8 text-xs',
-    md: 'h-10 w-10 text-sm',
-    lg: 'h-12 w-12 text-base',
-  };
-
-  const initials = useMemo(() => {
-    if (!member.username) return '?';
-    return member.username.slice(0, 2).toUpperCase();
-  }, [member.username]);
-
-  if (member.avatarUrl) {
-    return (
-      <img
-        src={member.avatarUrl}
-        alt={`${member.username}'s avatar`}
-        className={`${sizeClasses[size]} rounded-full object-cover ring-2 ring-white`}
-      />
-    );
-  }
-
-  // Generate a consistent color based on username
-  const colorIndex = member.username ? member.username.charCodeAt(0) % 6 : 0;
-  const bgColors = [
-    'bg-blue-500',
-    'bg-green-500',
-    'bg-purple-500',
-    'bg-pink-500',
-    'bg-indigo-500',
-    'bg-teal-500',
-  ];
-
-  return (
-    <div
-      className={`${sizeClasses[size]} ${bgColors[colorIndex]} flex items-center justify-center rounded-full font-medium text-white ring-2 ring-white`}
-      aria-label={`${member.username}'s avatar`}
-    >
-      {initials}
-    </div>
-  );
+  const sizeMap = { sm: 'md', md: 'lg', lg: 'xl' };
+  return <UserAvatar user={member} size={sizeMap[size] || 'lg'} />;
 };
 
 MemberAvatar.propTypes = {
   member: PropTypes.shape({
+    id: PropTypes.string,
     username: PropTypes.string,
     avatarUrl: PropTypes.string,
   }).isRequired,

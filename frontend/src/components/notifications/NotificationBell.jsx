@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { selectAuth } from '../../features/auth/authSlice.js';
 import {
+  addNotification,
   fetchNotifications,
   fetchUnreadCount,
   markAsRead,
@@ -9,6 +11,7 @@ import {
   selectNotifications,
 } from '../../features/notifications/notificationsSlice.js';
 import { useAppDispatch, useAppSelector } from '../../hooks/index.js';
+import { connectSocket, subscribe } from '../../services/socketService.js';
 
 const BellIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -97,12 +100,57 @@ const getNotificationIcon = (type) => {
   }
 };
 
+// Play notification sound from audio file
+const playNotificationSound = () => {
+  try {
+    const audio = new Audio('/sounds/notification.mp3');
+    audio.volume = 0.5;
+    audio.play().catch((error) => {
+      console.debug('[NotificationBell] Could not play notification sound:', error);
+    });
+  } catch (error) {
+    console.debug('[NotificationBell] Could not create audio element:', error);
+  }
+};
+
 const NotificationBell = () => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { items: notifications, unreadCount, status } = useAppSelector(selectNotifications);
+  const { token } = useAppSelector(selectAuth);
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Connect to socket and subscribe to real-time notifications
+  useEffect(() => {
+    if (!token) return;
+
+    let unsubscribe = null;
+
+    const setupSocket = async () => {
+      try {
+        await connectSocket(token);
+        console.debug('[NotificationBell] Socket connected, subscribing to notifications');
+        unsubscribe = subscribe('notification:new', (data) => {
+          console.debug('[NotificationBell] Received notification:', data);
+          if (data.notification) {
+            dispatch(addNotification(data.notification));
+            playNotificationSound();
+          }
+        });
+      } catch (error) {
+        console.error('[NotificationBell] Socket connection failed:', error);
+      }
+    };
+
+    setupSocket();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
+  }, [token, dispatch]);
 
   useEffect(() => {
     dispatch(fetchUnreadCount());
