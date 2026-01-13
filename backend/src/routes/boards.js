@@ -10,6 +10,7 @@ import {
   updateBoardMember,
   removeBoardMember,
   getBoardMembers,
+  getBoardActivity,
 } from '../controllers/boardsController.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -28,5 +29,8 @@ router.get('/:id/members', getBoardMembers);
 router.post('/:id/members', addBoardMember);
 router.patch('/:id/members/:userId', updateBoardMember);
 router.delete('/:id/members/:userId', removeBoardMember);
+
+// Activity/History route
+router.get('/:id/activity', getBoardActivity);
 
 export default router;

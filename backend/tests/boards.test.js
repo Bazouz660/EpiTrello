@@ -572,3 +572,242 @@ describe('Board Member Management', () => {
     expect(afterAdd.body.boards[0].membershipRole).toBe('member');
   });
 });
+
+describe('Board Activity/History API', () => {
+  it('creates activity entry when board is created', async () => {
+    const { token, user } = await registerAndLogin();
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Activity Test Board' });
+
+    expect(boardRes.status).toBe(201);
+    const boardId = boardRes.body.board.id;
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(activityRes.status).toBe(200);
+    expect(activityRes.body.activity).toHaveLength(1);
+    expect(activityRes.body.activity[0]).toMatchObject({
+      action: 'created',
+      entityType: 'board',
+      actor: user.id,
+      entityTitle: 'Activity Test Board',
+    });
+  });
+
+  it('tracks board rename in activity', async () => {
+    const { token } = await registerAndLogin();
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Original Title' });
+
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .patch(`/api/boards/${boardId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'New Title' });
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(activityRes.status).toBe(200);
+    expect(activityRes.body.activity.length).toBeGreaterThanOrEqual(2);
+
+    const renameActivity = activityRes.body.activity.find(
+      (a) => a.action === 'renamed' && a.entityType === 'board',
+    );
+    expect(renameActivity).toBeDefined();
+    expect(renameActivity.entityTitle).toBe('New Title');
+    expect(renameActivity.details).toContain('Original Title');
+  });
+
+  it('tracks member addition in activity', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'activitymember',
+      email: 'activitymember@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Member Activity Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .post(`/api/boards/${boardId}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: member.user.id, role: 'member' });
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    expect(activityRes.status).toBe(200);
+
+    const memberActivity = activityRes.body.activity.find(
+      (a) => a.action === 'added member' && a.entityType === 'member',
+    );
+    expect(memberActivity).toBeDefined();
+    expect(memberActivity.entityTitle).toBe('activitymember');
+    expect(memberActivity.details).toBe('as member');
+  });
+
+  it('tracks member removal in activity', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'removemember',
+      email: 'removemember@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Remove Member Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .post(`/api/boards/${boardId}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: member.user.id, role: 'member' });
+
+    await request(app)
+      .delete(`/api/boards/${boardId}/members/${member.user.id}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    const removeActivity = activityRes.body.activity.find(
+      (a) => a.action === 'removed member' && a.entityType === 'member',
+    );
+    expect(removeActivity).toBeDefined();
+    expect(removeActivity.entityTitle).toBe('removemember');
+  });
+
+  it('denies activity access to non-members', async () => {
+    const owner = await registerAndLogin();
+    const stranger = await registerAndLogin({
+      username: 'stranger',
+      email: 'stranger@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Private Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${stranger.token}`);
+
+    expect(activityRes.status).toBe(403);
+  });
+
+  it('allows viewer to access activity', async () => {
+    const owner = await registerAndLogin();
+    const viewer = await registerAndLogin({
+      username: 'activityviewer',
+      email: 'activityviewer@example.com',
+    });
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Viewer Activity Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .post(`/api/boards/${boardId}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: viewer.user.id, role: 'viewer' });
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${viewer.token}`);
+
+    expect(activityRes.status).toBe(200);
+    expect(activityRes.body.activity).toBeDefined();
+  });
+
+  it('supports pagination with limit and before parameters', async () => {
+    const { token } = await registerAndLogin();
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Pagination Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    // Perform multiple updates to generate activity
+    for (let i = 0; i < 5; i++) {
+      await request(app)
+        .patch(`/api/boards/${boardId}`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ description: `Description ${i}` });
+    }
+
+    // Get first page with limit
+    const firstPage = await request(app)
+      .get(`/api/boards/${boardId}/activity?limit=3`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(firstPage.status).toBe(200);
+    expect(firstPage.body.activity.length).toBe(3);
+
+    // Get next page using before parameter
+    const oldestTimestamp = firstPage.body.activity[2].createdAt;
+    const secondPage = await request(app)
+      .get(`/api/boards/${boardId}/activity?limit=3&before=${oldestTimestamp}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(secondPage.status).toBe(200);
+    expect(secondPage.body.activity.length).toBeGreaterThan(0);
+
+    // Ensure no overlap
+    const firstPageIds = firstPage.body.activity.map((a) => a.id);
+    const secondPageIds = secondPage.body.activity.map((a) => a.id);
+    const overlap = firstPageIds.filter((id) => secondPageIds.includes(id));
+    expect(overlap).toHaveLength(0);
+  });
+
+  it('returns activity sorted by createdAt descending', async () => {
+    const { token } = await registerAndLogin();
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Sort Test Board' });
+
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .patch(`/api/boards/${boardId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ title: 'Updated Title' });
+
+    const activityRes = await request(app)
+      .get(`/api/boards/${boardId}/activity`)
+      .set('Authorization', `Bearer ${token}`);
+
+    const timestamps = activityRes.body.activity.map((a) => new Date(a.createdAt).getTime());
+    for (let i = 1; i < timestamps.length; i++) {
+      expect(timestamps[i - 1]).toBeGreaterThanOrEqual(timestamps[i]);
+    }
+  });
+});

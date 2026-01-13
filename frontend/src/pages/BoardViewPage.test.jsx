@@ -249,7 +249,7 @@ describe('BoardViewPage', () => {
     await user.click(screen.getByLabelText('Open details for Set up CI'));
     expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument();
     expect(screen.getByText('Add lint step')).toBeInTheDocument();
-    expect(screen.getByText('Dev')).toBeInTheDocument();
+    expect(screen.getAllByText('Dev').length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText('member1').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('Great work')).toBeInTheDocument();
 

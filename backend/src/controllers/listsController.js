@@ -3,7 +3,7 @@ import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
 import { broadcastToBoard } from '../socket/index.js';
 
-import { canView, canEdit } from './boardsController.js';
+import { canView, canEdit, addBoardActivity } from './boardsController.js';
 
 const toResponse = (list) => ({
   id: list._id.toString(),
@@ -30,6 +30,15 @@ export const createList = async (req, res, next) => {
 
     const list = new List({ title, board: boardId, position: pos });
     await list.save();
+
+    // Track activity on the board
+    await addBoardActivity(boardId, {
+      action: 'created list',
+      entityType: 'list',
+      actorId: req.user._id,
+      entityId: list._id.toString(),
+      entityTitle: title,
+    });
 
     broadcastToBoard(boardId, 'list:created', {
       list: toResponse(list),
@@ -86,8 +95,32 @@ export const updateList = async (req, res, next) => {
     const board = await Board.findById(list.board);
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
-    if (title !== undefined) list.title = title;
-    if (archived !== undefined) list.archived = Boolean(archived);
+    const previousTitle = list.title;
+
+    if (title !== undefined && title !== previousTitle) {
+      list.title = title;
+      await addBoardActivity(list.board, {
+        action: 'renamed list',
+        entityType: 'list',
+        actorId: req.user._id,
+        entityId: list._id.toString(),
+        entityTitle: title,
+        details: `from "${previousTitle}" to "${title}"`,
+      });
+    }
+    if (archived !== undefined) {
+      const wasArchived = list.archived;
+      list.archived = Boolean(archived);
+      if (wasArchived !== list.archived) {
+        await addBoardActivity(list.board, {
+          action: list.archived ? 'archived list' : 'unarchived list',
+          entityType: 'list',
+          actorId: req.user._id,
+          entityId: list._id.toString(),
+          entityTitle: list.title,
+        });
+      }
+    }
     if (position !== undefined) list.position = position;
 
     await list.save();
@@ -115,9 +148,19 @@ export const deleteList = async (req, res, next) => {
 
     const boardId = list.board.toString();
     const listId = list._id.toString();
+    const listTitle = list.title;
 
     await Card.deleteMany({ list: list._id });
     await list.deleteOne();
+
+    // Track activity on the board
+    await addBoardActivity(boardId, {
+      action: 'deleted list',
+      entityType: 'list',
+      actorId: req.user._id,
+      entityId: listId,
+      entityTitle: listTitle,
+    });
 
     broadcastToBoard(boardId, 'list:deleted', {
       listId,
@@ -160,6 +203,15 @@ export const reorderLists = async (req, res, next) => {
     await List.bulkWrite(finalBulkOps, { ordered: false });
 
     const lists = await List.find({ board: boardId }).sort({ position: 1 });
+
+    // Track list reorder in board activity
+    await addBoardActivity(boardId, {
+      action: 'reordered lists',
+      entityType: 'list',
+      actorId: req.user._id,
+      entityId: boardId,
+      entityTitle: 'Lists',
+    });
 
     broadcastToBoard(boardId, 'lists:reordered', {
       boardId,

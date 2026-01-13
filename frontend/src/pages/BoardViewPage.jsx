@@ -21,7 +21,9 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import ActiveUsersDisplay from '../components/boards/ActiveUsersDisplay.jsx';
+import BoardHistoryPanel from '../components/boards/BoardHistoryPanel.jsx';
 import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
+import CardSearchFilter from '../components/boards/CardSearchFilter.jsx';
 import UserCursorsOverlay from '../components/boards/UserCursorsOverlay.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
 import CardListItem from '../components/cards/CardListItem.jsx';
@@ -32,11 +34,13 @@ import {
   addBoardMember,
   fetchBoardById,
   fetchBoardMembers,
+  fetchBoardActivity,
   removeBoardMember,
   searchUsers,
   selectBoards,
   updateBoardMember,
   clearMemberErrors,
+  clearActivityState,
 } from '../features/boards/boardsSlice.js';
 import {
   addComment,
@@ -100,8 +104,12 @@ const BoardViewPage = () => {
   const [activeCardId, setActiveCardId] = useState(null);
   const [activeDragItem, setActiveDragItem] = useState(null);
   const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
+  const [cardSearchQuery, setCardSearchQuery] = useState('');
+  const [cardFilters, setCardFilters] = useState({ labels: [], members: [], dueDates: [] });
+  const [isSearchFilterExpanded, setIsSearchFilterExpanded] = useState(false);
   const listTitleInputRef = useRef(null);
   // Track card order during drag to sync with dnd-kit's visual state
   const dragCardOrderRef = useRef(null);
@@ -224,6 +232,26 @@ const BoardViewPage = () => {
     dispatch(clearMemberErrors());
   }, [dispatch]);
 
+  const openHistoryPanel = useCallback(() => {
+    setIsHistoryPanelOpen(true);
+  }, []);
+
+  const closeHistoryPanel = useCallback(() => {
+    setIsHistoryPanelOpen(false);
+    dispatch(clearActivityState());
+  }, [dispatch]);
+
+  const handleFetchActivity = useCallback(() => {
+    dispatch(fetchBoardActivity({ boardId }));
+  }, [dispatch, boardId]);
+
+  const handleLoadMoreActivity = useCallback(
+    (before) => {
+      dispatch(fetchBoardActivity({ boardId, before }));
+    },
+    [dispatch, boardId],
+  );
+
   const handleSearchUsers = useCallback(
     async (query) => {
       setIsSearchingUsers(true);
@@ -333,6 +361,135 @@ const BoardViewPage = () => {
     });
     return result;
   }, [cardsState.entities, cardsState.idsByList, lists]);
+
+  // Collect all unique labels from cards for the filter dropdown
+  const availableLabels = useMemo(() => {
+    const allLabels = [];
+    Object.values(cardsByList).forEach((cards) => {
+      cards.forEach((card) => {
+        if (card.labels?.length) {
+          card.labels.forEach((label) => allLabels.push(label));
+        }
+      });
+    });
+    return allLabels;
+  }, [cardsByList]);
+
+  // Filter cards based on search query and filters
+  const filterCard = useCallback(
+    (card) => {
+      // Text search filter
+      if (cardSearchQuery) {
+        const query = cardSearchQuery.toLowerCase();
+        const titleMatch = card.title?.toLowerCase().includes(query);
+        const descriptionMatch = card.description?.toLowerCase().includes(query);
+        if (!titleMatch && !descriptionMatch) {
+          return false;
+        }
+      }
+
+      // Labels filter
+      if (cardFilters.labels?.length > 0) {
+        const cardLabelColors = (card.labels || []).map((l) => l.color);
+        const hasMatchingLabel = cardFilters.labels.some((filterColor) =>
+          cardLabelColors.includes(filterColor),
+        );
+        if (!hasMatchingLabel) {
+          return false;
+        }
+      }
+
+      // Members filter
+      if (cardFilters.members?.length > 0) {
+        const cardMembers = card.assignedMembers || [];
+        const hasUnassignedFilter = cardFilters.members.includes('unassigned');
+        const memberFilters = cardFilters.members.filter((m) => m !== 'unassigned');
+
+        if (hasUnassignedFilter && cardMembers.length === 0) {
+          return true;
+        }
+
+        if (memberFilters.length > 0) {
+          const hasMatchingMember = memberFilters.some((filterId) =>
+            cardMembers.includes(filterId),
+          );
+          if (!hasMatchingMember && !(hasUnassignedFilter && cardMembers.length === 0)) {
+            return false;
+          }
+        } else if (hasUnassignedFilter && cardMembers.length > 0) {
+          return false;
+        }
+      }
+
+      // Due date filter
+      if (cardFilters.dueDates?.length > 0) {
+        const now = new Date();
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const endOfWeek = new Date(today);
+        endOfWeek.setDate(today.getDate() + 7);
+
+        const dueDate = card.dueDate ? new Date(card.dueDate) : null;
+
+        const matchesDueDate = cardFilters.dueDates.some((filter) => {
+          switch (filter) {
+            case 'overdue':
+              return dueDate && dueDate < today;
+            case 'today':
+              return (
+                dueDate &&
+                dueDate >= today &&
+                dueDate < new Date(today.getTime() + 24 * 60 * 60 * 1000)
+              );
+            case 'week':
+              return dueDate && dueDate >= today && dueDate <= endOfWeek;
+            case 'none':
+              return !dueDate;
+            default:
+              return true;
+          }
+        });
+
+        if (!matchesDueDate) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    [cardSearchQuery, cardFilters],
+  );
+
+  // Filtered cards by list
+  const filteredCardsByList = useMemo(() => {
+    const hasFilters =
+      cardSearchQuery ||
+      cardFilters.labels?.length > 0 ||
+      cardFilters.members?.length > 0 ||
+      cardFilters.dueDates?.length > 0;
+
+    if (!hasFilters) {
+      return cardsByList;
+    }
+
+    const result = {};
+    lists.forEach((list) => {
+      result[list.id] = (cardsByList[list.id] || []).filter(filterCard);
+    });
+    return result;
+  }, [cardsByList, lists, filterCard, cardSearchQuery, cardFilters]);
+
+  // Count of filtered cards for display
+  const filteredCardCount = useMemo(() => {
+    let total = 0;
+    let filtered = 0;
+    Object.values(cardsByList).forEach((cards) => {
+      total += cards.length;
+    });
+    Object.values(filteredCardsByList).forEach((cards) => {
+      filtered += cards.length;
+    });
+    return { total, filtered, hasFilters: filtered !== total };
+  }, [cardsByList, filteredCardsByList]);
 
   const listIds = useMemo(() => lists.map((list) => list.id), [lists]);
 
@@ -813,6 +970,17 @@ const BoardViewPage = () => {
           </div>
 
           <div className="flex flex-wrap gap-3">
+            {/* Search and Filter */}
+            <CardSearchFilter
+              searchQuery={cardSearchQuery}
+              onSearchChange={setCardSearchQuery}
+              filters={cardFilters}
+              onFiltersChange={setCardFilters}
+              boardMembers={boardMembersList}
+              availableLabels={availableLabels}
+              isExpanded={isSearchFilterExpanded}
+              onToggleExpand={() => setIsSearchFilterExpanded(!isSearchFilterExpanded)}
+            />
             <button
               type="button"
               onClick={openMembersPanel}
@@ -832,6 +1000,26 @@ const BoardViewPage = () => {
                 />
               </svg>
               Members
+            </button>
+            <button
+              type="button"
+              onClick={openHistoryPanel}
+              className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+            >
+              <svg
+                className="mr-2 h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              History
             </button>
             {canEdit && (
               <button
@@ -864,6 +1052,24 @@ const BoardViewPage = () => {
           </div>
         )}
 
+        {/* Filter results indicator */}
+        {filteredCardCount.hasFilters && (
+          <div className="mx-auto mb-4 w-full max-w-6xl flex-shrink-0 rounded-lg border border-blue-400/50 bg-blue-500/20 px-4 py-2 text-sm text-blue-100 backdrop-blur">
+            <span className="font-medium">Showing {filteredCardCount.filtered}</span> of{' '}
+            {filteredCardCount.total} cards
+            <button
+              type="button"
+              onClick={() => {
+                setCardSearchQuery('');
+                setCardFilters({ labels: [], members: [], dueDates: [] });
+              }}
+              className="ml-2 text-blue-200 underline hover:text-white"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
         <div className="custom-scrollbar -mx-6 min-h-0 flex-1 overflow-x-auto overflow-y-hidden px-6 pb-3">
           <DndContext
             sensors={sensors}
@@ -886,12 +1092,15 @@ const BoardViewPage = () => {
               <SortableContext items={listIds} strategy={horizontalListSortingStrategy}>
                 {lists.map((list) => {
                   const isEditing = listEditor.id === list.id;
-                  const cards = cardsByList[list.id] ?? [];
-                  const cardIds = cards.map((c) => c.id);
+                  // Use filtered cards for display, but keep original for drag context
+                  const allCards = cardsByList[list.id] ?? [];
+                  const cards = filteredCardsByList[list.id] ?? [];
+                  const cardIds = allCards.map((c) => c.id); // Keep all card IDs for drag context
                   const cardsStatus = cardsState.fetchStatusByList[list.id] ?? 'idle';
                   const cardsError = cardsState.fetchErrorByList[list.id] ?? null;
                   const isDeletingList =
                     listsState.deleteStatus === 'loading' && listsState.deletingId === list.id;
+                  const hiddenCardCount = allCards.length - cards.length;
 
                   return (
                     <SortableList key={list.id} id={list.id} activeDragType={activeDragItem?.type}>
@@ -1015,6 +1224,17 @@ const BoardViewPage = () => {
                                   />
                                 </SortableCard>
                               ))}
+                              {hiddenCardCount > 0 && (
+                                <div className="mt-2 rounded-md border border-dashed border-white/20 bg-white/5 px-3 py-2 text-center text-xs text-white/50">
+                                  {hiddenCardCount} card{hiddenCardCount > 1 ? 's' : ''} hidden by
+                                  filters
+                                </div>
+                              )}
+                              {cards.length === 0 &&
+                                allCards.length === 0 &&
+                                cardsStatus === 'succeeded' && (
+                                  <p className="text-center text-xs text-white/50">No cards yet</p>
+                                )}
                             </SortableContext>
                           </DroppableListArea>
 
@@ -1274,6 +1494,18 @@ const BoardViewPage = () => {
         isRemovingMember={boardsState.removeMemberStatus === 'loading'}
         onUpdateMemberRole={handleUpdateMemberRole}
         isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
+      />
+
+      <BoardHistoryPanel
+        isOpen={isHistoryPanelOpen}
+        onClose={closeHistoryPanel}
+        activity={boardsState.activity}
+        activityStatus={boardsState.activityStatus}
+        activityError={boardsState.activityError}
+        hasMoreActivity={boardsState.hasMoreActivity}
+        onFetchActivity={handleFetchActivity}
+        onLoadMore={handleLoadMoreActivity}
+        boardMembers={boardMembersList}
       />
     </section>
   );

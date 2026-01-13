@@ -5,7 +5,7 @@ import { Card } from '../models/Card.js';
 import { List } from '../models/List.js';
 import { broadcastToBoard } from '../socket/index.js';
 
-import { canView, canEdit } from './boardsController.js';
+import { canView, canEdit, addBoardActivity } from './boardsController.js';
 import {
   createNotifications,
   extractMentions,
@@ -89,6 +89,16 @@ export const createCard = async (req, res, next) => {
     });
     await card.save();
 
+    // Track activity on the board
+    await addBoardActivity(board._id, {
+      action: 'created card',
+      entityType: 'card',
+      actorId: req.user._id,
+      entityId: card._id.toString(),
+      entityTitle: title,
+      details: `in "${list.title}"`,
+    });
+
     broadcastToBoard(board._id.toString(), 'card:created', {
       card: toResponse(card),
       listId,
@@ -153,6 +163,7 @@ export const updateCard = async (req, res, next) => {
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const previousAssignedMembers = (card.assignedMembers || []).map((m) => m.toString());
+    const previousArchived = card.archived;
 
     if (updates.list && updates.list !== card.list.toString()) {
       const newList = await List.findById(updates.list);
@@ -221,6 +232,53 @@ export const updateCard = async (req, res, next) => {
 
     await card.save();
 
+    // Track card updates in board activity
+    for (const message of activityMessages) {
+      let action = 'updated card';
+      let details = '';
+
+      if (message === 'Title updated') {
+        action = 'renamed card';
+        details = `to "${card.title}"`;
+      } else if (message === 'Description updated') {
+        action = 'updated card description';
+      } else if (message === 'Due date set') {
+        action = 'set due date on card';
+        details = new Date(card.dueDate).toLocaleDateString();
+      } else if (message === 'Due date cleared') {
+        action = 'removed due date from card';
+      } else if (message === 'Labels updated') {
+        action = 'updated labels on card';
+      } else if (message === 'Checklist updated') {
+        action = 'updated checklist on card';
+      } else if (message === 'Assignees updated') {
+        action = 'updated assignees on card';
+      } else if (message === 'Card reordered') {
+        // Skip reorder within same list - too noisy
+        continue;
+      }
+
+      await addBoardActivity(board._id, {
+        action,
+        entityType: 'card',
+        actorId: req.user._id,
+        entityId: card._id.toString(),
+        entityTitle: card.title,
+        details,
+      });
+    }
+
+    // Track archive/unarchive separately
+    if (updates.archived !== undefined && updates.archived !== previousArchived) {
+      await addBoardActivity(board._id, {
+        action: updates.archived ? 'archived card' : 'unarchived card',
+        entityType: 'card',
+        actorId: req.user._id,
+        entityId: card._id.toString(),
+        entityTitle: card.title,
+      });
+    }
+
     if (updates.assignedMembers) {
       const newAssignedMembers = updates.assignedMembers.filter(
         (memberId) => !previousAssignedMembers.includes(memberId),
@@ -264,10 +322,21 @@ export const deleteCard = async (req, res, next) => {
     if (!canEdit(board, req.user._id)) return res.status(403).json({ message: 'Forbidden' });
 
     const cardId = card._id.toString();
+    const cardTitle = card.title;
     const listId = card.list.toString();
     const boardId = board._id.toString();
 
     await card.deleteOne();
+
+    // Track activity on the board
+    await addBoardActivity(boardId, {
+      action: 'deleted card',
+      entityType: 'card',
+      actorId: req.user._id,
+      entityId: cardId,
+      entityTitle: cardTitle,
+      details: `from "${list.title}"`,
+    });
 
     broadcastToBoard(boardId, 'card:deleted', {
       cardId,
@@ -394,6 +463,18 @@ export const moveCard = async (req, res, next) => {
       { new: true },
     );
 
+    // Track movement in board activity (only when moving between lists)
+    if (!sameList) {
+      await addBoardActivity(sourceBoard._id, {
+        action: 'moved card',
+        entityType: 'card',
+        actorId: req.user._id,
+        entityId: updatedCard._id.toString(),
+        entityTitle: updatedCard.title,
+        details: `from "${sourceList.title}" to "${targetList.title}"`,
+      });
+    }
+
     broadcastToBoard(sourceBoard._id.toString(), 'card:moved', {
       card: toResponse(updatedCard),
       sourceListId: originalListId,
@@ -438,6 +519,15 @@ export const addComment = async (req, res, next) => {
     card.comments.push(comment);
     card.activity.push(buildActivityEntry('Comment added', req.user._id));
     await card.save();
+
+    // Track comment in board activity
+    await addBoardActivity(board._id, {
+      action: 'commented on card',
+      entityType: 'card',
+      actorId: req.user._id,
+      entityId: card._id.toString(),
+      entityTitle: card.title,
+    });
 
     const assignedMemberIds = (card.assignedMembers || []).map((m) => m.toString());
     if (assignedMemberIds.length > 0) {

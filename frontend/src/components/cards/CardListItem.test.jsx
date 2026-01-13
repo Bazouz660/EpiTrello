@@ -153,4 +153,79 @@ describe('CardListItem', () => {
       expect(screen.getByText('?')).toBeInTheDocument(); // Fallback initial
     });
   });
+
+  describe('labels', () => {
+    it('does not show labels section when card has no labels', () => {
+      render(<CardListItem card={mockCard} onOpenDetail={mockOnOpenDetail} />);
+      expect(screen.queryByLabelText('Card labels')).not.toBeInTheDocument();
+    });
+
+    it('shows labels with text', () => {
+      const cardWithLabels = {
+        ...mockCard,
+        labels: [
+          { color: '#ef4444', text: 'Urgent' },
+          { color: '#3b82f6', text: 'Feature' },
+        ],
+      };
+      render(<CardListItem card={cardWithLabels} onOpenDetail={mockOnOpenDetail} />);
+      expect(screen.getByLabelText('Card labels')).toBeInTheDocument();
+      expect(screen.getByText('Urgent')).toBeInTheDocument();
+      expect(screen.getByText('Feature')).toBeInTheDocument();
+    });
+
+    it('shows labels without text', () => {
+      const cardWithColorOnlyLabels = {
+        ...mockCard,
+        labels: [{ color: '#22c55e', text: '' }],
+      };
+      render(<CardListItem card={cardWithColorOnlyLabels} onOpenDetail={mockOnOpenDetail} />);
+      expect(screen.getByLabelText('Card labels')).toBeInTheDocument();
+      expect(screen.getByLabelText('Label: #22c55e')).toBeInTheDocument();
+    });
+  });
+
+  describe('due dates', () => {
+    it('does not show due date when card has no due date', () => {
+      render(<CardListItem card={mockCard} onOpenDetail={mockOnOpenDetail} />);
+      expect(screen.queryByLabelText(/Due date/i)).not.toBeInTheDocument();
+    });
+
+    it('shows due date badge for future dates', () => {
+      const futureDate = new Date();
+      futureDate.setDate(futureDate.getDate() + 7);
+      const cardWithDueDate = {
+        ...mockCard,
+        dueDate: futureDate.toISOString(),
+      };
+      render(<CardListItem card={cardWithDueDate} onOpenDetail={mockOnOpenDetail} />);
+      expect(screen.getByLabelText(/Due date/i)).toBeInTheDocument();
+    });
+
+    it('shows overdue styling for past due dates', () => {
+      const pastDate = new Date();
+      pastDate.setDate(pastDate.getDate() - 3);
+      const cardWithOverdueDueDate = {
+        ...mockCard,
+        dueDate: pastDate.toISOString(),
+      };
+      render(<CardListItem card={cardWithOverdueDueDate} onOpenDetail={mockOnOpenDetail} />);
+      const dueDateBadge = screen.getByLabelText(/Due date/i);
+      expect(dueDateBadge).toBeInTheDocument();
+      expect(dueDateBadge).toHaveClass('bg-red-500/80');
+    });
+
+    it('shows due-soon styling for dates within 1 day', () => {
+      const soonDate = new Date();
+      soonDate.setHours(soonDate.getHours() + 12);
+      const cardWithSoonDueDate = {
+        ...mockCard,
+        dueDate: soonDate.toISOString(),
+      };
+      render(<CardListItem card={cardWithSoonDueDate} onOpenDetail={mockOnOpenDetail} />);
+      const dueDateBadge = screen.getByLabelText(/Due date/i);
+      expect(dueDateBadge).toBeInTheDocument();
+      expect(dueDateBadge).toHaveClass('bg-yellow-500/80');
+    });
+  });
 });
