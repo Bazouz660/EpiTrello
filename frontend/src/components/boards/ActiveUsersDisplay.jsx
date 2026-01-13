@@ -50,18 +50,21 @@ const ActiveUsersDisplay = ({
 }) => {
   const [showAllUsers, setShowAllUsers] = useState(false);
 
-  // Filter out current user and sort by join time
-  const filteredUsers = useMemo(() => {
+  // Total count includes current user
+  const totalUserCount = users.length;
+
+  // Filter out current user for avatar display and sort by join time
+  const otherUsers = useMemo(() => {
     return users
       .filter((user) => user.userId !== currentUserId)
       .sort((a, b) => new Date(a.joinedAt) - new Date(b.joinedAt));
   }, [users, currentUserId]);
 
-  const visibleUsers = filteredUsers.slice(0, maxVisible);
-  const overflowCount = filteredUsers.length - maxVisible;
+  const visibleUsers = otherUsers.slice(0, maxVisible);
+  const overflowCount = otherUsers.length - maxVisible;
   const hasOverflow = overflowCount > 0;
 
-  if (filteredUsers.length === 0) {
+  if (totalUserCount === 0) {
     return null;
   }
 
@@ -97,7 +100,7 @@ const ActiveUsersDisplay = ({
 
       {/* Label */}
       <span className="ml-3 text-sm text-white/80">
-        {filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'} online
+        {totalUserCount} {totalUserCount === 1 ? 'user' : 'users'} online
       </span>
 
       {/* Expanded user list dropdown */}
@@ -116,10 +119,10 @@ const ActiveUsersDisplay = ({
           {/* Dropdown */}
           <div className="absolute left-0 top-full z-50 mt-2 max-h-64 w-56 overflow-y-auto rounded-lg border border-white/20 bg-slate-800/95 p-2 shadow-xl backdrop-blur">
             <p className="mb-2 px-2 text-xs font-medium uppercase tracking-wide text-slate-400">
-              All active users ({filteredUsers.length})
+              All active users ({totalUserCount})
             </p>
             <ul className="space-y-1">
-              {filteredUsers.map((user) => (
+              {otherUsers.map((user) => (
                 <li
                   key={user.userId}
                   className="flex items-center gap-2 rounded-md px-2 py-1.5 hover:bg-white/10"
