@@ -266,7 +266,7 @@ const BoardHistoryPanel = ({
 
   // Get the oldest activity timestamp for pagination
   const oldestTimestamp = useMemo(() => {
-    if (activity.length === 0) return null;
+    if (!activity || activity.length === 0) return null;
     return activity[activity.length - 1]?.createdAt;
   }, [activity]);
 
@@ -295,7 +295,7 @@ const BoardHistoryPanel = ({
 
   const isLoading = activityStatus === 'loading';
   const hasError = activityStatus === 'failed';
-  const hasActivity = activity.length > 0;
+  const hasActivity = activity?.length > 0;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end" role="presentation">
