@@ -1,6 +1,51 @@
 import mongoose from 'mongoose';
 
-const { Schema } = mongoose;
+const { Schema, Types } = mongoose;
+
+const generateSubdocumentId = () => new Types.ObjectId().toString();
+
+const activityEntrySchema = new Schema(
+  {
+    id: {
+      type: String,
+      default: generateSubdocumentId,
+    },
+    actor: {
+      type: Schema.Types.ObjectId,
+      ref: 'User',
+      default: null,
+    },
+    action: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    entityType: {
+      type: String,
+      enum: ['board', 'list', 'card', 'member'],
+      required: true,
+    },
+    entityId: {
+      type: String,
+      default: null,
+    },
+    entityTitle: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    details: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: false },
+);
 
 const memberSchema = new Schema(
   {
@@ -65,6 +110,10 @@ const boardSchema = new Schema(
     background: {
       type: backgroundSchema,
       default: () => ({ type: 'color', value: '#0f172a', thumbnail: '' }),
+    },
+    activity: {
+      type: [activityEntrySchema],
+      default: [],
     },
   },
   { timestamps: true },

@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import ActiveUsersDisplay from '../components/boards/ActiveUsersDisplay.jsx';
+import BoardHistoryPanel from '../components/boards/BoardHistoryPanel.jsx';
 import BoardMembersPanel from '../components/boards/BoardMembersPanel.jsx';
 import UserCursorsOverlay from '../components/boards/UserCursorsOverlay.jsx';
 import CardDetailModal from '../components/cards/CardDetailModal.jsx';
@@ -32,11 +33,13 @@ import {
   addBoardMember,
   fetchBoardById,
   fetchBoardMembers,
+  fetchBoardActivity,
   removeBoardMember,
   searchUsers,
   selectBoards,
   updateBoardMember,
   clearMemberErrors,
+  clearActivityState,
 } from '../features/boards/boardsSlice.js';
 import {
   addComment,
@@ -100,6 +103,7 @@ const BoardViewPage = () => {
   const [activeCardId, setActiveCardId] = useState(null);
   const [activeDragItem, setActiveDragItem] = useState(null);
   const [isMembersPanelOpen, setIsMembersPanelOpen] = useState(false);
+  const [isHistoryPanelOpen, setIsHistoryPanelOpen] = useState(false);
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [isSearchingUsers, setIsSearchingUsers] = useState(false);
   const listTitleInputRef = useRef(null);
@@ -223,6 +227,26 @@ const BoardViewPage = () => {
     setUserSearchResults([]);
     dispatch(clearMemberErrors());
   }, [dispatch]);
+
+  const openHistoryPanel = useCallback(() => {
+    setIsHistoryPanelOpen(true);
+  }, []);
+
+  const closeHistoryPanel = useCallback(() => {
+    setIsHistoryPanelOpen(false);
+    dispatch(clearActivityState());
+  }, [dispatch]);
+
+  const handleFetchActivity = useCallback(() => {
+    dispatch(fetchBoardActivity({ boardId }));
+  }, [dispatch, boardId]);
+
+  const handleLoadMoreActivity = useCallback(
+    (before) => {
+      dispatch(fetchBoardActivity({ boardId, before }));
+    },
+    [dispatch, boardId],
+  );
 
   const handleSearchUsers = useCallback(
     async (query) => {
@@ -833,6 +857,26 @@ const BoardViewPage = () => {
               </svg>
               Members
             </button>
+            <button
+              type="button"
+              onClick={openHistoryPanel}
+              className="inline-flex items-center rounded-md border border-white/30 bg-white/10 px-4 py-2 text-sm font-medium text-white backdrop-blur hover:bg-white/20"
+            >
+              <svg
+                className="mr-2 h-4 w-4"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              History
+            </button>
             {canEdit && (
               <button
                 type="button"
@@ -1274,6 +1318,18 @@ const BoardViewPage = () => {
         isRemovingMember={boardsState.removeMemberStatus === 'loading'}
         onUpdateMemberRole={handleUpdateMemberRole}
         isUpdatingMember={boardsState.updateMemberStatus === 'loading'}
+      />
+
+      <BoardHistoryPanel
+        isOpen={isHistoryPanelOpen}
+        onClose={closeHistoryPanel}
+        activity={boardsState.activity}
+        activityStatus={boardsState.activityStatus}
+        activityError={boardsState.activityError}
+        hasMoreActivity={boardsState.hasMoreActivity}
+        onFetchActivity={handleFetchActivity}
+        onLoadMore={handleLoadMoreActivity}
+        boardMembers={boardMembersList}
       />
     </section>
   );

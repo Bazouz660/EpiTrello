@@ -36,6 +36,11 @@ const buildInitialState = () => ({
   removeMemberError: null,
   updateMemberStatus: 'idle',
   updateMemberError: null,
+  // Activity/History state
+  activity: [],
+  activityStatus: 'idle',
+  activityError: null,
+  hasMoreActivity: true,
 });
 
 const initialState = buildInitialState();
@@ -161,6 +166,22 @@ export const searchUsers = createAsyncThunk(
   },
 );
 
+export const fetchBoardActivity = createAsyncThunk(
+  'boards/fetchActivity',
+  async ({ boardId, before, limit = 50 }, { rejectWithValue }) => {
+    try {
+      let url = `/boards/${boardId}/activity?limit=${limit}`;
+      if (before) {
+        url += `&before=${encodeURIComponent(before)}`;
+      }
+      const { data } = await httpClient.get(url);
+      return { activity: data.activity ?? [], append: !!before };
+    } catch (error) {
+      return rejectWithValue(extractErrorMessage(error));
+    }
+  },
+);
+
 const boardsSlice = createSlice({
   name: 'boards',
   initialState,
@@ -170,6 +191,12 @@ const boardsSlice = createSlice({
       state.addMemberError = null;
       state.removeMemberError = null;
       state.updateMemberError = null;
+    },
+    clearActivityState: (state) => {
+      state.activity = [];
+      state.activityStatus = 'idle';
+      state.activityError = null;
+      state.hasMoreActivity = true;
     },
     // Real-time sync actions
     boardUpdatedFromSocket: (state, action) => {
@@ -194,6 +221,13 @@ const boardsSlice = createSlice({
     boardMembersUpdatedFromSocket: (state, action) => {
       const { members } = action.payload;
       state.members = members;
+    },
+    boardActivityAddedFromSocket: (state, action) => {
+      const { activityEntry } = action.payload;
+      // Add new activity to the beginning (most recent first)
+      if (activityEntry && !state.activity.some((a) => a.id === activityEntry.id)) {
+        state.activity = [activityEntry, ...state.activity];
+      }
     },
   },
   extraReducers: (builder) => {
@@ -346,6 +380,31 @@ const boardsSlice = createSlice({
         state.removeMemberError =
           action.payload ?? action.error?.message ?? 'Failed to remove member';
       })
+      // Activity/History
+      .addCase(fetchBoardActivity.pending, (state, action) => {
+        // Only show loading on initial load, not when paginating
+        if (!action.meta.arg.before) {
+          state.activityStatus = 'loading';
+        }
+        state.activityError = null;
+      })
+      .addCase(fetchBoardActivity.fulfilled, (state, action) => {
+        state.activityStatus = 'succeeded';
+        const { activity, append } = action.payload;
+        if (append) {
+          // Append to existing activity for pagination
+          state.activity = [...state.activity, ...activity];
+        } else {
+          // Replace activity for initial load or refresh
+          state.activity = activity;
+        }
+        // If we got fewer items than requested, there's no more to load
+        state.hasMoreActivity = activity.length >= 50;
+      })
+      .addCase(fetchBoardActivity.rejected, (state, action) => {
+        state.activityStatus = 'failed';
+        state.activityError = action.payload ?? action.error?.message ?? 'Failed to load activity';
+      })
       .addCase(clearSession, () => buildInitialState());
   },
 });
@@ -354,9 +413,11 @@ export const boardsReducer = boardsSlice.reducer;
 export const {
   clearBoardsState,
   clearMemberErrors,
+  clearActivityState,
   boardUpdatedFromSocket,
   boardDeletedFromSocket,
   boardMembersUpdatedFromSocket,
+  boardActivityAddedFromSocket,
 } = boardsSlice.actions;
 export const selectBoards = (state) => state.boards;
 export const createBoardsInitialState = () => buildInitialState();
