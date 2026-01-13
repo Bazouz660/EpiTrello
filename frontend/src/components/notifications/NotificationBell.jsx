@@ -11,7 +11,7 @@ import {
   selectNotifications,
 } from '../../features/notifications/notificationsSlice.js';
 import { useAppDispatch, useAppSelector } from '../../hooks/index.js';
-import { subscribe } from '../../services/socketService.js';
+import { connectSocket, subscribe } from '../../services/socketService.js';
 
 const BellIcon = () => (
   <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -129,6 +129,7 @@ const NotificationBell = () => {
 
     const setupSocket = async () => {
       try {
+        await connectSocket(token);
         console.debug('[NotificationBell] Socket connected, subscribing to notifications');
         unsubscribe = subscribe('notification:new', (data) => {
           console.debug('[NotificationBell] Received notification:', data);

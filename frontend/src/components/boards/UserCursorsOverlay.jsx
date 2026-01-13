@@ -70,10 +70,10 @@ const UserCursor = memo(({ userId, username, avatarUrl, x, y }) => {
 
       {/* Username label */}
       <div
-        className={`${colors.bg} absolute left-4 top-3 flex items-center gap-1.5 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium text-white shadow-md`}
+        className={`${colors.bg} absolute left-4 top-3 flex items-center gap-1.5 whitespace-nowrap rounded-full py-0.5 text-xs font-medium text-white shadow-md ${avatarUrl ? 'pl-1 pr-2.5' : 'px-2'}`}
       >
         {avatarUrl ? (
-          <img src={avatarUrl} alt="" className="h-4 w-4 rounded-full object-cover" />
+          <img src={avatarUrl} alt="" className="h-4 w-4 flex-shrink-0 rounded-full object-cover" />
         ) : null}
         <span>{displayName}</span>
       </div>
