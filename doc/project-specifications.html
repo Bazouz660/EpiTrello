@@ -1,0 +1,1715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EpiTrello - Project Specifications</title>
+    <style>
+        @page { size: A4; margin: 15mm; }
+        
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, Arial, sans-serif;
+            line-height: 1.5;
+            color: #1e293b;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            font-size: 13px;
+            font-weight: 400;
+        }
+        
+        .container {
+            max-width: 210mm;
+            margin: 0 auto;
+            background: white;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        .cover {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px 50px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        
+        .cover::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+        }
+        
+        .cover h1 {
+            font-size: 52px;
+            font-weight: 800;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .cover .subtitle {
+            font-size: 22px;
+            font-weight: 500;
+            opacity: 0.95;
+            margin-bottom: 30px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .cover .meta {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 20px 35px;
+            border-radius: 12px;
+            position: relative;
+            z-index: 1;
+            text-align: left;
+        }
+        
+        .cover .meta p { margin: 6px 0; font-size: 14px; }
+        
+        .content { padding: 35px 45px; }
+        
+        .section {
+            margin-bottom: 28px;
+            page-break-inside: avoid;
+        }
+        
+        .section-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 16px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+            page-break-after: avoid;
+        }
+        
+        .section-number {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            width: 38px;
+            height: 38px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: 700;
+            margin-right: 14px;
+            flex-shrink: 0;
+        }
+        
+        .section-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1e293b;
+        }
+        
+        .subsection {
+            margin: 16px 0;
+            page-break-inside: avoid;
+        }
+        
+        .subsection-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            page-break-after: avoid;
+        }
+        
+        .subsection-title::before {
+            content: '';
+            width: 4px;
+            height: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin-right: 8px;
+            border-radius: 2px;
+        }
+        
+        .info-box {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e9e4f7 100%);
+            border-left: 4px solid #667eea;
+            padding: 14px;
+            border-radius: 6px;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }
+        
+        .info-box p { margin: 4px 0; font-size: 13px; }
+        
+        .team-box {
+            display: flex;
+            gap: 12px;
+            margin: 12px 0;
+        }
+        
+        .team-member {
+            flex: 1;
+            background: white;
+            border: 2px solid #667eea;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: 600;
+            color: #667eea;
+            font-size: 13px;
+        }
+        
+        .tech-stack {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 8px;
+            margin: 12px 0;
+        }
+        
+        .tech-item {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 10px 8px;
+            border-radius: 6px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        
+        .tech-item .tech-label { font-size: 10px; opacity: 0.9; margin-bottom: 2px; }
+        .tech-item .tech-name { font-size: 12px; font-weight: 600; }
+        
+        .tech-detail-box {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 14px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        
+        .tech-detail-box h5 {
+            color: #667eea;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .tech-detail-box p {
+            font-size: 12px;
+            color: #475569;
+            margin: 6px 0;
+            line-height: 1.6;
+        }
+        
+        .rationale {
+            background: #f0f9ff;
+            border-left: 3px solid #0ea5e9;
+            padding: 8px 12px;
+            margin: 8px 0;
+            font-size: 11px;
+            color: #0c4a6e;
+        }
+        
+        .two-column {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 10px 0;
+        }
+        
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            margin: 12px 0;
+        }
+        
+        .metric-card {
+            background: linear-gradient(135deg, #f0f4ff 0%, #e9e4f7 100%);
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        
+        .metric-card .metric-value {
+            font-size: 22px;
+            font-weight: 700;
+            color: #667eea;
+            margin-bottom: 2px;
+        }
+        
+        .metric-card .metric-label { font-size: 10px; color: #64748b; }
+        
+        p { font-size: 13px; margin: 8px 0; }
+        strong { color: #1e293b; }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 11px;
+        }
+        
+        th, td {
+            border: 1px solid #e2e8f0;
+            padding: 8px 10px;
+            text-align: left;
+        }
+        
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+        }
+        
+        tr:nth-child(even) { background: #f8fafc; }
+        
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 10px 12px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+        
+        .endpoint-group {
+            margin: 12px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        
+        .endpoint-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 8px 12px;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        
+        .endpoint-row {
+            display: grid;
+            grid-template-columns: 80px 1fr 2fr;
+            padding: 6px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 11px;
+            align-items: center;
+        }
+        
+        .endpoint-row:last-child { border-bottom: none; }
+        .endpoint-row:nth-child(even) { background: #f8fafc; }
+        
+        .method {
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            text-align: center;
+        }
+        
+        .method-get { background: #10b981; color: white; }
+        .method-post { background: #3b82f6; color: white; }
+        .method-patch { background: #f59e0b; color: white; }
+        .method-delete { background: #ef4444; color: white; }
+        
+        .highlight-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+            border-left: 4px solid #f59e0b;
+            padding: 12px;
+            border-radius: 6px;
+            margin: 12px 0;
+            page-break-inside: avoid;
+        }
+        
+        .timeline {
+            position: relative;
+            padding-left: 28px;
+            margin: 16px 0;
+        }
+        
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 0;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(180deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .timeline-item {
+            position: relative;
+            margin-bottom: 16px;
+            padding: 12px;
+            background: #f8fafc;
+            border-radius: 6px;
+            page-break-inside: avoid;
+        }
+        
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -22px;
+            top: 16px;
+            width: 10px;
+            height: 10px;
+            background: white;
+            border: 2px solid #667eea;
+            border-radius: 50%;
+        }
+        
+        .timeline-item h4 {
+            color: #667eea;
+            font-size: 13px;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .timeline-item .duration-badge {
+            background: #667eea;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        
+        .timeline-item .dates {
+            color: #64748b;
+            font-size: 11px;
+            margin-bottom: 8px;
+        }
+        
+        .timeline-item p {
+            font-size: 11px;
+            color: #475569;
+            margin: 4px 0;
+        }
+        
+        .schema-diagram {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 14px;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 10px;
+            line-height: 1.4;
+            overflow-x: auto;
+            white-space: pre;
+        }
+        
+        .feature-table td:first-child { font-weight: 600; color: #667eea; width: 25%; }
+        
+        .ws-event {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin: 6px 0;
+            font-size: 11px;
+        }
+        
+        .ws-event code {
+            background: #667eea;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+        }
+        
+        @media print {
+            body { background: white !important; padding: 0; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .container { box-shadow: none; max-width: 100%; }
+            .cover { page-break-after: always; min-height: 100vh; }
+            .section, .subsection, .tech-detail-box, .timeline-item, .metric-card, .info-box { page-break-inside: avoid; }
+            .section-header, .subsection-title { page-break-after: avoid; }
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .button-container, .instructions-banner { display: none !important; }
+        }
+        
+        .button-container { position: fixed; bottom: 25px; right: 25px; z-index: 1000; }
+        
+        .download-button {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white;
+            border: none;
+            padding: 14px 28px;
+            border-radius: 50px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.4);
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .download-button:hover { transform: translateY(-3px); box-shadow: 0 15px 40px rgba(16, 185, 129, 0.5); }
+        
+        .instructions-banner {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 16px 28px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.5);
+            z-index: 1001;
+            max-width: 600px;
+            display: none;
+            animation: slideDown 0.4s ease-out;
+        }
+        
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateX(-50%) translateY(-30px); }
+            to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        
+        .instructions-content { text-align: center; }
+        .instructions-title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+        .instructions-text { font-size: 13px; line-height: 1.6; }
+        .instructions-steps { background: rgba(255,255,255,0.15); padding: 12px; border-radius: 8px; margin-top: 12px; text-align: left; }
+        .instructions-steps div { padding: 4px 0; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="button-container">
+        <button class="download-button" onclick="showInstructionsAndPrint()">
+            <span>📥</span>
+            <span>Download PDF</span>
+        </button>
+    </div>
+    
+    <div class="instructions-banner" id="instructions">
+        <div class="instructions-content">
+            <div class="instructions-title">🎯 Download with Colors</div>
+            <div class="instructions-text">Print window opens in 2 seconds...</div>
+            <div class="instructions-steps">
+                <div><strong>1.</strong> Destination → <strong>"Save as PDF"</strong></div>
+                <div><strong>2.</strong> More settings → Check <strong>"Background graphics" ✓</strong></div>
+                <div><strong>3.</strong> Click <strong>"Save"</strong></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function showInstructionsAndPrint() {
+            const instructions = document.getElementById('instructions');
+            instructions.style.display = 'block';
+            setTimeout(() => { window.print(); }, 2000);
+            setTimeout(() => { instructions.style.display = 'none'; }, 8000);
+        }
+        window.onafterprint = function() { document.getElementById('instructions').style.display = 'none'; };
+    </script>
+    
+    <div class="container">
+        <!-- COVER PAGE -->
+        <div class="cover">
+            <h1>EpiTrello</h1>
+            <div class="subtitle">Technical Project Specifications</div>
+            <div class="meta">
+                <p><strong>Project Type:</strong> Collaborative Kanban Board Application</p>
+                <p><strong>Development Period:</strong> October 20, 2025 – January 28, 2026</p>
+                <p><strong>Team:</strong> Corentin Wolff & Basile Trebus-Hamann</p>
+                <p><strong>Version:</strong> 1.0.0 | <strong>Last Updated:</strong> January 13, 2026</p>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Section 1: Project Overview -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">1</div>
+                    <h2 class="section-title">Project Overview</h2>
+                </div>
+                
+                <div class="info-box">
+                    <p><strong>EpiTrello</strong> is a full-stack real-time collaborative project management application inspired by Trello, implementing the Kanban methodology. Built as a professional simulation project, it enables teams to organize work through boards containing ordered lists of task cards with drag-and-drop functionality, real-time synchronization via WebSockets, and comprehensive access control.</p>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Project Context</h5>
+                        <p><strong>Duration:</strong> 14 calendar weeks (October 20, 2025 – January 28, 2026) with development occurring 3 days per week (Monday–Wednesday), totaling approximately 39 working days and 312 planned development hours distributed across 7 two-week sprints.</p>
+                        <p><strong>Methodology:</strong> Agile/Scrum with Test-Driven Development (TDD), enforcing 90%+ code coverage thresholds via CI/CD pipelines, mandatory code reviews through pull requests, and continuous deployment to Fly.io cloud infrastructure.</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Team Composition</h5>
+                        <p><strong>Corentin Wolff</strong> – Full-stack development with focus on backend architecture, API design, database modeling, and WebSocket implementation.</p>
+                        <p><strong>Basile Trebus-Hamann</strong> – Full-stack development with focus on frontend architecture, React components, drag-and-drop system, and UI/UX implementation.</p>
+                    </div>
+                </div>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">312h</div>
+                        <div class="metric-label">Development Hours</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">7</div>
+                        <div class="metric-label">Sprint Cycles</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">90%+</div>
+                        <div class="metric-label">Test Coverage</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">45+</div>
+                        <div class="metric-label">API Endpoints</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 2: Technical Architecture -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">2</div>
+                    <h2 class="section-title">Technical Architecture</h2>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">System Architecture Overview</h3>
+                    <p>EpiTrello implements a modern three-tier client-server architecture with clear separation between presentation, business logic, and data persistence layers. The frontend React SPA communicates with the Express.js backend through RESTful HTTP endpoints for CRUD operations and Socket.IO WebSocket connections for real-time event propagation.</p>
+                    
+                    <div class="schema-diagram">┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                  CLIENT LAYER                                    │
+│  React 19 SPA │ Redux Toolkit State │ React Router 7 │ Tailwind CSS │ dnd-kit   │
+│  ────────────────────────────────────────────────────────────────────────────── │
+│  Pages → Features (Slices) → Components → Services (HTTP/WebSocket Clients)     │
+└──────────────────────────────────┬──────────────────────┬───────────────────────┘
+                                   │ REST API (HTTPS)     │ WebSocket (WSS)
+                                   ▼                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                  SERVER LAYER                                    │
+│  Node.js (ESM) │ Express 4 │ Socket.IO 4 │ Mongoose 8 │ JWT Auth │ Zod Valid.  │
+│  ────────────────────────────────────────────────────────────────────────────── │
+│  Routes → Controllers → Models → Middleware (Auth/Error) → Socket Gateway       │
+└──────────────────────────────────────────────┬──────────────────────────────────┘
+                                               │ MongoDB Driver
+                                               ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                   DATA LAYER                                     │
+│  MongoDB Atlas (M0 Free Tier) │ Collections: Users, Boards, Lists, Cards, Notifs│
+│  Indexes: Compound, Text Search │ Mongoose ODM with Schema Validation            │
+└─────────────────────────────────────────────────────────────────────────────────┘</div>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Technology Stack & Selection Rationale</h3>
+                    <div class="tech-stack">
+                        <div class="tech-item"><div class="tech-label">UI Framework</div><div class="tech-name">React 19</div></div>
+                        <div class="tech-item"><div class="tech-label">State Mgmt</div><div class="tech-name">Redux Toolkit</div></div>
+                        <div class="tech-item"><div class="tech-label">Routing</div><div class="tech-name">React Router 7</div></div>
+                        <div class="tech-item"><div class="tech-label">Styling</div><div class="tech-name">Tailwind CSS 3</div></div>
+                        <div class="tech-item"><div class="tech-label">Drag & Drop</div><div class="tech-name">dnd-kit</div></div>
+                        <div class="tech-item"><div class="tech-label">HTTP Client</div><div class="tech-name">Axios</div></div>
+                        <div class="tech-item"><div class="tech-label">Build Tool</div><div class="tech-name">Vite 7</div></div>
+                        <div class="tech-item"><div class="tech-label">WS Client</div><div class="tech-name">Socket.IO Client</div></div>
+                        <div class="tech-item"><div class="tech-label">Runtime</div><div class="tech-name">Node.js (ESM)</div></div>
+                        <div class="tech-item"><div class="tech-label">Framework</div><div class="tech-name">Express 4</div></div>
+                        <div class="tech-item"><div class="tech-label">Real-time</div><div class="tech-name">Socket.IO 4</div></div>
+                        <div class="tech-item"><div class="tech-label">Database</div><div class="tech-name">MongoDB Atlas</div></div>
+                        <div class="tech-item"><div class="tech-label">ODM</div><div class="tech-name">Mongoose 8</div></div>
+                        <div class="tech-item"><div class="tech-label">Auth</div><div class="tech-name">JWT + bcrypt</div></div>
+                        <div class="tech-item"><div class="tech-label">Validation</div><div class="tech-name">Zod</div></div>
+                        <div class="tech-item"><div class="tech-label">Email</div><div class="tech-name">Nodemailer</div></div>
+                    </div>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Technology</th>
+                        <th>Selection Rationale</th>
+                        <th>Alternatives Considered</th>
+                    </tr>
+                    <tr>
+                        <td><strong>React 19</strong></td>
+                        <td>Component-based architecture enables reusable UI elements critical for Kanban boards (cards, lists, modals). Massive ecosystem with battle-tested libraries for routing, state management, and drag-and-drop. React 19's concurrent features improve perceived performance during complex drag operations. Strong TypeScript support and extensive documentation reduce onboarding time.</td>
+                        <td>Vue.js (smaller ecosystem for complex DnD), Svelte (less mature tooling), Angular (steeper learning curve, overkill for project scope)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Redux Toolkit</strong></td>
+                        <td>Centralized state management essential for synchronizing board/list/card data across components and WebSocket events. createAsyncThunk simplifies API calls with loading/error states. Predictable state updates via reducers make debugging real-time sync issues straightforward. DevTools enable time-travel debugging critical for complex UI states.</td>
+                        <td>Zustand (simpler but less structured for large apps), React Context (insufficient for complex cross-component state), MobX (reactive approach harder to debug)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>@dnd-kit</strong></td>
+                        <td>Modern drag-and-drop library with first-class accessibility support (keyboard navigation, screen reader announcements). Modular architecture allows combining sortable lists with cross-container drops. Better performance than alternatives through optimized rendering. Active maintenance and TypeScript-first design.</td>
+                        <td>react-beautiful-dnd (deprecated, no longer maintained), react-dnd (lower-level API requiring more boilerplate), native HTML5 DnD (poor cross-browser support, no animations)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Tailwind CSS 3</strong></td>
+                        <td>Utility-first approach enables rapid UI prototyping without context-switching to CSS files. Purging removes unused styles resulting in minimal production bundles (~10KB). Built-in dark mode support via variant classes. Consistent design system through configuration. JIT compiler provides instant feedback during development.</td>
+                        <td>CSS Modules (more boilerplate), Styled Components (runtime overhead), plain CSS (inconsistent patterns, harder maintenance)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Vite 7</strong></td>
+                        <td>Near-instant dev server startup via native ES modules (vs. bundling everything upfront). Hot Module Replacement preserves application state during edits. Optimized production builds with Rollup. First-class React support with @vitejs/plugin-react. Significantly faster than webpack-based alternatives.</td>
+                        <td>Create React App (slow builds, maintenance mode), webpack (complex configuration), Parcel (less ecosystem support)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Express 4</strong></td>
+                        <td>Minimal, unopinionated framework providing flexibility for REST API design. Extensive middleware ecosystem (helmet, cors, compression, morgan). Easy integration with Socket.IO on same HTTP server. Low learning curve enables faster development. Production-proven at scale.</td>
+                        <td>Fastify (faster but smaller ecosystem), Koa (less middleware availability), NestJS (TypeScript-heavy, over-engineered for project scope), Hono (newer, less battle-tested)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Socket.IO 4</strong></td>
+                        <td>Automatic WebSocket connection with fallback to HTTP long-polling for unreliable networks. Built-in room system perfect for board-based broadcasting. Automatic reconnection with configurable backoff. Client libraries for React integration. Handles connection state and heartbeats automatically.</td>
+                        <td>ws (too low-level, manual room management), Pusher (third-party dependency, cost), Server-Sent Events (unidirectional only)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>MongoDB Atlas</strong></td>
+                        <td>Document model naturally fits hierarchical board→list→card structure without complex joins. Flexible schema accommodates evolving card properties (labels, checklists, comments). Text indexes enable full-text search. Free M0 tier sufficient for project scope. Atlas provides managed backups, monitoring, and scaling.</td>
+                        <td>PostgreSQL (rigid schema requires migrations for card property changes), MySQL (same issues), Firebase (vendor lock-in, less query flexibility)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Mongoose 8</strong></td>
+                        <td>Schema validation ensures data integrity at application layer. Middleware hooks enable pre/post save logic (password hashing, activity logging). Population simplifies reference resolution. TypeScript support via schema inference. Mature ecosystem with extensive documentation.</td>
+                        <td>Native MongoDB driver (no schema validation), Prisma (better for SQL, MongoDB support less mature), TypeORM (primarily SQL-focused)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>JWT + bcrypt</strong></td>
+                        <td>Stateless JWT authentication eliminates server-side session storage, simplifying horizontal scaling. bcrypt's adaptive hashing protects against brute-force attacks. Token-based auth works seamlessly with both REST API and WebSocket connections. Industry-standard approach with extensive security auditing.</td>
+                        <td>Session-based auth (requires sticky sessions or shared storage), OAuth only (overkill for internal auth), Passport.js (abstraction adds complexity without benefit here)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Zod</strong></td>
+                        <td>TypeScript-first schema validation with excellent type inference. Single source of truth for request validation and TypeScript types. Composable schemas for complex nested objects (cards with labels, checklists). Better error messages than alternatives. Zero dependencies.</td>
+                        <td>Joi (JavaScript-first, weaker TS support), Yup (less performant, API inconsistencies), express-validator (middleware-coupled, less reusable)</td>
+                    </tr>
+                </table>
+
+                <div class="rationale">
+                    <strong>Full-Stack JavaScript Decision:</strong> Using JavaScript/Node.js across frontend and backend enables code sharing (validation schemas, type definitions), reduces context-switching, and allows both team members to work on any layer. The ecosystem's package availability (npm) and community support accelerate development within the 14-week timeline.
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Frontend Architecture</h5>
+                        <p>The React 19 SPA uses a feature-based architecture where each domain (auth, boards, cards, lists, notifications) is encapsulated as a Redux Toolkit slice with its async thunks, selectors, and related components. The application implements optimistic UI updates for responsive interactions, with Socket.IO listeners syncing remote changes to local Redux state.</p>
+                        <p><strong>Key Patterns:</strong> Feature slices with createAsyncThunk, React Router 7 nested layouts with protected routes, custom hooks for socket management (useBoardSocket), dnd-kit sensors for accessible keyboard/pointer drag operations.</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Backend Architecture</h5>
+                        <p>The Express.js server follows a layered MVC architecture with clear separation: Routes define endpoints and apply middleware, Controllers handle HTTP request/response cycles and orchestrate business logic, Models encapsulate Mongoose schemas with validation and indexing.</p>
+                        <p><strong>Middleware Pipeline:</strong> Helmet (security headers) → CORS → Compression → Body Parser → Morgan (logging) → JWT Authentication → Route Handlers → Error Handler. Socket.IO runs on the same HTTP server with JWT-authenticated connections and room-based broadcasting.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Section 3: Data Models -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">3</div>
+                    <h2 class="section-title">Data Model Design</h2>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Entity Relationships</h3>
+                    <div class="schema-diagram">User (1) ──owns──▶ (N) Board ──contains──▶ (N) List ──contains──▶ (N) Card
+  │                      │                                              │
+  │ receives             │ members (N:M)                                │ assignedMembers (N:M)
+  ▼                      ▼                                              ▼
+Notification ◀────────── Board.members[] ────────────────────────▶ Card.assignedMembers[]
+                         (embedded with role)                      (ObjectId references)</div>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Model</th>
+                        <th>Key Fields</th>
+                        <th>Indexes</th>
+                        <th>Relationships</th>
+                    </tr>
+                    <tr>
+                        <td><strong>User</strong></td>
+                        <td>username (unique, 3-50 chars), email (unique, lowercase), password (bcrypt hash, min 12 chars pre-hash), avatarUrl (base64 data URL), passwordResetToken/Expires</td>
+                        <td>email (unique), username (unique)</td>
+                        <td>Owns boards, member of boards, receives notifications, assigned to cards</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Board</strong></td>
+                        <td>title (max 120 chars), description, owner (User ref), members[] (embedded: user ref + role enum), background (type: color|image, value, thumbnail), activity[] (embedded log)</td>
+                        <td>owner, members.user, text(title, description)</td>
+                        <td>Contains lists, has owner (1:1), has members (N:M embedded)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>List</strong></td>
+                        <td>title (max 120 chars), board (Board ref), position (Number, 0-indexed), archived (Boolean, soft delete)</td>
+                        <td>board, compound {board, position}</td>
+                        <td>Belongs to board (N:1), contains cards (1:N)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Card</strong></td>
+                        <td>title (max 120 chars), description, list (List ref), position, labels[] (color + text), dueDate, checklist[] (text + completed), assignedMembers[] (User refs), comments[] (embedded), activity[] (embedded), archived</td>
+                        <td>list, compound {list, position}, text(title, description)</td>
+                        <td>Belongs to list (N:1), assigned members (N:M)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Notification</strong></td>
+                        <td>recipient (User ref), type (card_assigned|mention|comment), title (max 200), message (max 500), board/card/actor (refs), read (Boolean)</td>
+                        <td>recipient, read, compound {recipient, read, createdAt}</td>
+                        <td>Sent to user (N:1), references board/card/actor</td>
+                    </tr>
+                </table>
+
+                <div class="rationale">
+                    <strong>Design Decisions:</strong> Member roles are embedded in Board.members[] for atomic permission checks without joins. Activity logs are embedded for read performance but should consider TTL indexes for production scale. Card comments include author reference for @mention notifications. Text indexes enable full-text search across boards and cards.
+                </div>
+            </div>
+
+            <!-- Section 4: API Reference -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">4</div>
+                    <h2 class="section-title">REST API Reference</h2>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>Base URLs:</strong> Development: <code>http://localhost:5000/api</code> | Production: <code>https://epitrello-backend.fly.dev/api</code></p>
+                    <p><strong>Authentication:</strong> All protected endpoints require <code>Authorization: Bearer &lt;jwt_token&gt;</code> header. Tokens are valid for 7 days and obtained via /auth/login or /auth/register.</p>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">🔐 Authentication Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/auth/register</code>Create account with username, email, password (min 12 chars, strength validated via zxcvbn)</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/auth/login</code>Authenticate with email/password, returns JWT token and user object</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/auth/me</code>Get current authenticated user profile from token</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/auth/forgot-password</code>Request password reset email (always returns success to prevent enumeration)</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/auth/reset-password</code>Reset password using token from email link</div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">👤 User Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/users/profile</code>Get current user's full profile</div>
+                    <div class="endpoint-row"><span class="method method-patch">PUT</span><code>/users/profile</code>Update profile (multipart/form-data for avatar upload, max 2MB JPEG/PNG/GIF/WebP)</div>
+                    <div class="endpoint-row"><span class="method method-patch">PUT</span><code>/users/password</code>Change password (requires current password verification)</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/users/search?q=</code>Search users by username/email (min 2 chars, max 10 results, excludes self)</div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">📋 Board Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/boards</code>Create board with title, description, background (color hex or image URL)</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/boards</code>List all boards where user is owner or member (includes membershipRole)</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/boards/:id</code>Get specific board with members populated</div>
+                    <div class="endpoint-row"><span class="method method-patch">PATCH</span><code>/boards/:id</code>Update board (admin/owner only)</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/boards/:id</code>Delete board and all lists/cards (owner only)</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/boards/:id/members</code>Get detailed member list with user profiles and roles</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/boards/:id/members</code>Add member with role (admin/owner only, roles: admin|member|viewer)</div>
+                    <div class="endpoint-row"><span class="method method-patch">PATCH</span><code>/boards/:id/members/:userId</code>Update member role (admin/owner only)</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/boards/:id/members/:userId</code>Remove member (admin/owner or self-removal)</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/boards/:id/activity</code>Get paginated activity history (limit, before cursor)</div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">📝 List Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/lists</code>Create list with title, board ID, optional position</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/lists?board=</code>Get all lists for a board, sorted by position</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/lists/:id</code>Get specific list</div>
+                    <div class="endpoint-row"><span class="method method-patch">PATCH</span><code>/lists/:id</code>Update list title, position, or archived status</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/lists/:id</code>Delete list and all contained cards</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/lists/reorder</code>Batch reorder multiple lists by position</div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">🎴 Card Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/cards</code>Create card with title, list ID, optional description/position</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/cards?list=</code>Get all cards for a list, sorted by position</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/cards/:id</code>Get card with full details (comments, activity, members populated)</div>
+                    <div class="endpoint-row"><span class="method method-patch">PATCH</span><code>/cards/:id</code>Update card fields (title, description, labels, dueDate, checklist, etc.)</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/cards/:id</code>Delete card</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/cards/:id/move</code>Move card to different list and/or position</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/cards/:id/comments</code>Add comment to card (triggers notifications for @mentions)</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/cards/:id/comments/:commentId</code>Delete comment (author only)</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/cards/:id/members</code>Assign member to card (triggers notification)</div>
+                    <div class="endpoint-row"><span class="method method-delete">DELETE</span><code>/cards/:id/members/:userId</code>Unassign member from card</div>
+                </div>
+
+                <div class="endpoint-group">
+                    <div class="endpoint-header">🔔 Notification Endpoints</div>
+                    <div class="endpoint-row"><span class="method method-get">GET</span><code>/notifications</code>Get user's notifications (supports ?unreadOnly=true)</div>
+                    <div class="endpoint-row"><span class="method method-patch">PATCH</span><code>/notifications/:id/read</code>Mark notification as read</div>
+                    <div class="endpoint-row"><span class="method method-post">POST</span><code>/notifications/read-all</code>Mark all notifications as read</div>
+                </div>
+            </div>
+
+            <!-- Section 5: WebSocket Events -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">5</div>
+                    <h2 class="section-title">Real-Time WebSocket Events</h2>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>Connection:</strong> Socket.IO client connects to <code>ws://localhost:5000</code> (dev) or <code>wss://epitrello-backend.fly.dev</code> (prod) with JWT token in auth object. Supports automatic reconnection with exponential backoff (1s–5s delay, max 10 attempts).</p>
+                    <p><strong>Room System:</strong> Users automatically join personal room (<code>user:{userId}</code>) for notifications. Board rooms (<code>board:{boardId}</code>) require explicit join via <code>board:join</code> event.</p>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Board Room Events</h5>
+                        <div class="ws-event"><code>board:join</code> / <code>board:leave</code> – Client joins/leaves board room</div>
+                        <div class="ws-event"><code>board:joined</code> – Server confirms join with activeUsers list</div>
+                        <div class="ws-event"><code>board:user-joined</code> / <code>board:user-left</code> – User presence changes</div>
+                        <div class="ws-event"><code>board:updated</code> – Board settings changed (title, background, etc.)</div>
+                        <div class="ws-event"><code>board:deleted</code> – Board was deleted, clients should navigate away</div>
+                        <div class="ws-event"><code>board:member-added</code> / <code>board:member-removed</code> – Membership changes</div>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>List & Card Events</h5>
+                        <div class="ws-event"><code>list:created</code> / <code>list:updated</code> / <code>list:deleted</code> – List CRUD operations</div>
+                        <div class="ws-event"><code>list:reordered</code> – Multiple lists repositioned</div>
+                        <div class="ws-event"><code>card:created</code> / <code>card:updated</code> / <code>card:deleted</code> – Card CRUD operations</div>
+                        <div class="ws-event"><code>card:moved</code> – Card moved between lists or repositioned</div>
+                        <div class="ws-event"><code>card:comment-added</code> – New comment on card</div>
+                        <div class="ws-event"><code>card:member-assigned</code> / <code>card:member-unassigned</code> – Assignment changes</div>
+                    </div>
+                </div>
+
+                <div class="tech-detail-box">
+                    <h5>Event Flow Example: Card Move Operation</h5>
+                    <p>1. <strong>Client A</strong> drags card from List 1 to List 2 → dnd-kit fires onDragEnd → dispatch moveCard async thunk</p>
+                    <p>2. <strong>HTTP Request:</strong> POST /api/cards/:id/move with {targetListId, position} → Server updates Card.list and Card.position in MongoDB</p>
+                    <p>3. <strong>Server broadcasts</strong> <code>card:moved</code> event to board room with sourceListId, targetListId, updated card position</p>
+                    <p>4. <strong>Clients B, C</strong> receive socket event → Redux listener dispatches action to update local card state in both lists</p>
+                    <p>5. <strong>Client A</strong> receives HTTP response → optimistic update confirmed or rolled back on error</p>
+                </div>
+            </div>
+
+            <!-- Section 6: Functional Features & User Stories -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">6</div>
+                    <h2 class="section-title">Functional Features & User Stories</h2>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">User Stories by Epic</h3>
+                </div>
+
+                <table>
+                    <tr>
+                        <th style="width: 18%">Epic</th>
+                        <th style="width: 52%">User Story</th>
+                        <th style="width: 15%">Priority</th>
+                        <th style="width: 15%">Sprint</th>
+                    </tr>
+                    <tr>
+                        <td rowspan="5"><strong>Authentication</strong></td>
+                        <td>As a visitor, I want to register with email and password so that I can create my own boards and collaborate with others.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to log in with my credentials so that I can access my boards and continue my work.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to reset my password via email so that I can recover access if I forget my credentials.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to update my profile (username, avatar) so that team members can identify me on shared boards.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to change my password from settings so that I can maintain account security.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="6"><strong>Board Management</strong></td>
+                        <td>As a user, I want to create a new board with a title and background so that I can organize a new project.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to see all my boards (owned and shared) on a dashboard so that I can quickly access any project.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a board owner, I want to edit board title, description, and background so that I can customize the workspace.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a board owner, I want to delete a board so that I can remove completed or abandoned projects.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 2</td>
+                    </tr>
+                    <tr>
+                        <td>As a board owner/admin, I want to invite users by searching their username/email so that I can build my team.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 5</td>
+                    </tr>
+                    <tr>
+                        <td>As a board owner, I want to assign roles (admin, member, viewer) to members so that I can control access levels.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 5</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="4"><strong>List Management</strong></td>
+                        <td>As a board member, I want to create lists (e.g., "To Do", "In Progress", "Done") so that I can organize workflow stages.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to rename lists inline so that I can adjust my workflow without interruption.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to drag lists horizontally to reorder them so that I can reflect my workflow sequence.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 4</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to archive/delete lists so that I can clean up unused workflow stages.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="8"><strong>Card Management</strong></td>
+                        <td>As a board member, I want to create cards with a title so that I can add tasks to my lists.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to open a card modal to add description, due date, and labels so that I can provide task details.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to drag cards vertically within a list so that I can prioritize tasks.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 4</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to drag cards between lists so that I can move tasks through workflow stages.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 4</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to create checklists on cards so that I can break tasks into subtasks.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to add comments to cards so that I can discuss tasks with team members.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 3</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to assign members to cards so that responsibility is clear.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 5</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to @mention users in comments so that I can notify specific team members.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 6</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="4"><strong>Real-Time Collaboration</strong></td>
+                        <td>As a board member, I want to see changes made by others instantly so that I'm always working with current data.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 6</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to see who else is viewing the board so that I know who's online.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 6</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to receive notifications when I'm assigned to a card or @mentioned so that I don't miss important updates.</td>
+                        <td>Must Have</td>
+                        <td>Sprint 6</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to see a notification badge and center so that I can review all my alerts in one place.</td>
+                        <td>Should Have</td>
+                        <td>Sprint 6</td>
+                    </tr>
+                    <tr>
+                        <td rowspan="3"><strong>Bonus Features</strong></td>
+                        <td>As a user, I want to search cards by title/description so that I can quickly find specific tasks.</td>
+                        <td>Could Have</td>
+                        <td>Sprint 6+</td>
+                    </tr>
+                    <tr>
+                        <td>As a board member, I want to view board activity history so that I can track what changed and when.</td>
+                        <td>Could Have</td>
+                        <td>Sprint 5</td>
+                    </tr>
+                    <tr>
+                        <td>As a user, I want to toggle dark mode so that I can reduce eye strain during night work sessions.</td>
+                        <td>Could Have</td>
+                        <td>Sprint 6+</td>
+                    </tr>
+                </table>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Feature Implementation Summary</h3>
+                </div>
+
+                <table class="feature-table">
+                    <tr>
+                        <th>Feature Domain</th>
+                        <th>Implemented Capabilities</th>
+                    </tr>
+                    <tr>
+                        <td>User Management</td>
+                        <td>Secure registration with password strength validation (zxcvbn library enforcing 12+ char passwords with complexity requirements), JWT-based stateless authentication with 7-day token expiry, email-based password reset flow with cryptographically secure tokens (SHA-256 hashed, 1-hour expiry), profile management with avatar upload (base64-encoded, max 2MB, JPEG/PNG/GIF/WebP formats), user search for board member invitations.</td>
+                    </tr>
+                    <tr>
+                        <td>Board Management</td>
+                        <td>Full CRUD operations on boards with customizable backgrounds (solid colors via hex codes or image URLs with thumbnails), role-based access control with four permission levels (owner: full control including deletion; admin: manage members and settings; member: create/edit content; viewer: read-only access), board activity history with paginated retrieval and cursor-based pagination, member invitation system with role assignment.</td>
+                    </tr>
+                    <tr>
+                        <td>List Management</td>
+                        <td>Create, rename, archive, and delete lists within boards, drag-and-drop horizontal reordering using dnd-kit with position persistence, batch reorder API for atomic multi-list position updates, soft-delete via archived flag for potential restoration.</td>
+                    </tr>
+                    <tr>
+                        <td>Card Management</td>
+                        <td>Full card lifecycle management with rich content: titles (max 120 chars), markdown-compatible descriptions, color-coded labels with optional text, due dates with visual indicators, checklists with completion tracking, member assignment (triggers notifications), comments with @mention support (parses usernames and creates notifications), card activity log tracking all modifications.</td>
+                    </tr>
+                    <tr>
+                        <td>Drag & Drop</td>
+                        <td>Accessible drag-and-drop powered by @dnd-kit with keyboard navigation support, card reordering within lists (vertical), card movement between lists (cross-list drops), list reordering (horizontal), visual feedback with drag overlays, placeholders, and smooth animations, optimistic UI updates with server reconciliation.</td>
+                    </tr>
+                    <tr>
+                        <td>Real-Time Sync</td>
+                        <td>Socket.IO-based bidirectional communication with JWT-authenticated connections, room-based event broadcasting (per-board rooms for collaborative updates, per-user rooms for notifications), active user presence indicators showing who's viewing the board, automatic reconnection with exponential backoff, live updates for all CRUD operations propagated to connected clients within 500ms.</td>
+                    </tr>
+                    <tr>
+                        <td>Notifications</td>
+                        <td>Push notifications for card assignments, @mentions in comments, and comments on assigned cards, real-time delivery via WebSocket to user's personal room, mark-as-read functionality (individual and bulk), unread count badge in navigation, notification center with links to relevant cards/boards.</td>
+                    </tr>
+                </table>
+
+                <div class="highlight-box">
+                    <p><strong>Bonus Features (Implemented):</strong> Full-text search across cards and boards using MongoDB text indexes, board activity history with actor/action/entity tracking, dark mode support via Tailwind CSS dark variant classes, avatar upload with client-side preview and server-side validation.</p>
+                </div>
+            </div>
+
+            <!-- Section 7: Security & Performance -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">7</div>
+                    <h2 class="section-title">Security & Performance</h2>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Authentication & Authorization</h5>
+                        <p><strong>Password Security:</strong> Passwords hashed using bcrypt with salt rounds, minimum 12 characters enforced, strength validated via zxcvbn to reject weak/common passwords. Password reset tokens are SHA-256 hashed before storage with 1-hour expiration.</p>
+                        <p><strong>JWT Implementation:</strong> Stateless authentication using jsonwebtoken library with configurable secret (minimum 16 characters enforced via Zod), 7-day expiration, tokens validated on every protected request via auth middleware.</p>
+                        <p><strong>RBAC:</strong> Four-tier role system (owner > admin > member > viewer) enforced at controller level, permission checks before all mutating operations, self-removal allowed for members leaving boards.</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Request Security</h5>
+                        <p><strong>Helmet Middleware:</strong> Sets security headers including Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, Strict-Transport-Security (HSTS in production).</p>
+                        <p><strong>CORS Configuration:</strong> Whitelist-based origin validation, credentials mode enabled for cookie/auth header transmission, configured via CLIENT_URL environment variable.</p>
+                        <p><strong>Input Validation:</strong> All request bodies validated using Zod schemas at API boundary, MongoDB injection prevented via Mongoose type coercion, file uploads restricted by type and size (multer configuration).</p>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Performance Targets & Optimizations</h3>
+                    <table>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Target</th>
+                            <th>Implementation</th>
+                        </tr>
+                        <tr>
+                            <td>Initial Page Load</td>
+                            <td>&lt; 3 seconds</td>
+                            <td>Vite code splitting with React.lazy, Tailwind CSS purging (removes unused styles), gzip compression via Express middleware, CDN-ready static build</td>
+                        </tr>
+                        <tr>
+                            <td>API Response Time</td>
+                            <td>&lt; 200ms (p95)</td>
+                            <td>MongoDB compound indexes on frequently queried fields, Mongoose lean() queries where virtuals not needed, efficient projections limiting returned fields</td>
+                        </tr>
+                        <tr>
+                            <td>Real-Time Latency</td>
+                            <td>&lt; 500ms</td>
+                            <td>Socket.IO with WebSocket transport (fallback to polling), room-based broadcasting to minimize event scope, optimistic UI updates on client</td>
+                        </tr>
+                        <tr>
+                            <td>Concurrent Users</td>
+                            <td>10+ per board</td>
+                            <td>Stateless JWT auth (no server-side sessions), MongoDB connection pooling, Fly.io auto-scaling machines</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 8: DevOps & Infrastructure -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">8</div>
+                    <h2 class="section-title">DevOps & Infrastructure</h2>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">CI/CD Pipeline (GitHub Actions)</h3>
+                    <div class="schema-diagram">┌──────────────┐     ┌───────────────────────────────────────────────────┐     ┌─────────────┐
+│   Git Push   │────▶│              Continuous Integration                │────▶│  PR Merge   │
+│  (PR/Branch) │     │  ┌─────────┐ ┌─────────┐ ┌──────────┐ ┌─────────┐ │     │  (to main)  │
+└──────────────┘     │  │ ESLint  │ │Prettier │ │  Vitest  │ │Coverage │ │     └──────┬──────┘
+                     │  │  Check  │ │  Check  │ │  Tests   │ │  90%+   │ │            │
+                     │  └─────────┘ └─────────┘ └──────────┘ └─────────┘ │            ▼
+                     └───────────────────────────────────────────────────┘     ┌─────────────┐
+                                                                               │     CD      │
+┌─────────────────────────────────────────────────────────────────────────────┤  (Deploy)   │
+│                              Fly.io Deployment                               └─────────────┘
+│  ┌────────────────────┐                    ┌────────────────────┐                         │
+│  │ epitrello-frontend │ ◀───── HTTPS ─────▶│ epitrello-backend  │◀──── MongoDB Atlas ────│
+│  │   (React/Vite)     │                    │  (Node/Express)    │       (M0 Free)        │
+│  │   Port 80          │                    │    Port 8080       │                        │
+│  └────────────────────┘                    └────────────────────┘                        │
+└─────────────────────────────────────────────────────────────────────────────────────────┘</div>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Local Development Environment</h5>
+                        <p><strong>Docker Compose:</strong> Three-service orchestration with MongoDB container (localhost:27017), backend API container (localhost:5000 with hot reload via --watch flag), and frontend dev server (localhost:5173 with Vite HMR).</p>
+                        <p><strong>Environment Variables:</strong> Backend requires MONGODB_URI, JWT_SECRET (validated via Zod schema); optional SMTP_* vars for email functionality. Frontend uses VITE_API_URL (must be prefixed with VITE_ for client exposure).</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Production Deployment (Fly.io)</h5>
+                        <p><strong>Infrastructure:</strong> Paris region (cdg) deployment, auto-scaling machines, health checks on /api/health endpoint. Frontend served as static build via nginx-equivalent. Backend runs Node.js with production optimizations.</p>
+                        <p><strong>Secrets Management:</strong> Fly.io secrets for MONGODB_URI (Atlas connection string with 0.0.0.0/0 network access), JWT_SECRET (32+ chars), optional SMTP configuration for password reset emails.</p>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Code Quality Tooling</h3>
+                    <table>
+                        <tr>
+                            <th>Tool</th>
+                            <th>Configuration</th>
+                            <th>Enforcement</th>
+                        </tr>
+                        <tr>
+                            <td>ESLint 9</td>
+                            <td>Flat config (eslint.config.js), React hooks plugin, React refresh plugin for HMR compatibility</td>
+                            <td>CI fails on any warning (--max-warnings=0), pre-commit hook via Husky</td>
+                        </tr>
+                        <tr>
+                            <td>Prettier 3</td>
+                            <td>Tailwind CSS plugin for class sorting, consistent formatting across JS/JSX/JSON/MD</td>
+                            <td>CI format check, auto-format on staged files via lint-staged</td>
+                        </tr>
+                        <tr>
+                            <td>Vitest 2</td>
+                            <td>React Testing Library + MSW for frontend, Supertest + mongodb-memory-server for backend</td>
+                            <td>90% coverage thresholds (statements/lines), 80% branches/functions</td>
+                        </tr>
+                        <tr>
+                            <td>Husky</td>
+                            <td>Pre-commit hooks running lint-staged (ESLint + Prettier on staged files)</td>
+                            <td>Blocks commits failing lint/format checks</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Section 9: Development Schedule -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">9</div>
+                    <h2 class="section-title">Development Schedule</h2>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>Project Management:</strong> GitHub Projects board with Kanban workflow (Backlog → Sprint Backlog → In Progress → Review → Done). Issues labeled by sprint with assignees and linked pull requests.</p>
+                    <p><strong>Team:</strong> 2 developers | <strong>Methodology:</strong> Scrum with 2-week sprints | <strong>Work Distribution:</strong> Backend/Frontend split per sprint</p>
+                </div>
+
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value">14</div>
+                        <div class="metric-label">Calendar Weeks</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">39</div>
+                        <div class="metric-label">Working Days</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">312h</div>
+                        <div class="metric-label">Total Hours</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value">48h</div>
+                        <div class="metric-label">Per Sprint</div>
+                    </div>
+                </div>
+
+                <div class="timeline">
+                    <div class="timeline-item">
+                        <h4>Sprint 1: Project Setup <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Oct 21-23 & Oct 28-30 (6 days)</div>
+                        <p>Environment configuration (Node.js ESM, MongoDB, React 19 with Vite), Git repository initialization with monorepo structure, Docker Compose for local development, GitHub Actions CI/CD pipeline setup, ESLint/Prettier/Husky code quality toolchain, MongoDB schema design for Users/Boards/Lists/Cards/Notifications, REST API architecture planning with endpoint definitions, Redux Toolkit store configuration with feature slices.</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 2: Authentication & Boards <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Nov 4-6 & Nov 11-13 (6 days)</div>
+                        <p><strong>Planned Tasks:</strong> User Login, User Logout, View User Profile, Create Board, View All Boards, View Board Details, Password security enforcement</p>
+                        <p>User registration API with Zod validation and zxcvbn password strength checking, JWT-based login system with 7-day token expiry, authentication middleware for protected routes, React auth components (registration/login forms with validation feedback), user profile view and edit functionality with avatar upload, Board CRUD API endpoints with owner assignment, dashboard page with board listing and creation modal, board background customization (color picker and image URL).</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 3: Lists & Cards <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Nov 18-20 & Nov 25-27 (6 days)</div>
+                        <p><strong>Planned Tasks:</strong> Lists CRUD Operations (Backend), Cards CRUD Operations (Backend), Board View Page (Frontend), Board View Tests, View Card Details</p>
+                        <p><strong>User Stories:</strong> Edit Board, Delete Board, Create List, Edit List, Delete List, Create Card, View Card Details, Edit Card, Add Card Description, Delete Card</p>
+                        <p>List CRUD API with position-based ordering and board association, Card CRUD API with nested resources (labels, checklist, comments, activity), board view page with horizontal list layout, list component with inline title editing and card container, card component with preview (title, labels, due date indicators, member avatars), card detail modal with tabbed sections (description, checklist, comments, activity), rich text description editor with markdown preview.</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 4: Drag & Drop <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Dec 2-4 & Dec 9-11 (6 days)</div>
+                        <p><strong>Planned Tasks:</strong> Lists DnD Backend, List DnD Frontend, Cards DnD within Lists (Backend + Frontend), Cards DnD between Lists (Backend + Frontend), DnD Tests</p>
+                        <p><strong>User Stories:</strong> Reorder Lists, Move Cards Between Lists, Reorder Cards Within Lists</p>
+                        <p>@dnd-kit library integration with DndContext, sensors (pointer, keyboard), and collision detection, horizontal list drag-and-drop with SortableContext and position updates, vertical card drag within lists using sortable items, cross-list card movement with source/target list handling, visual feedback system (drag overlays, insertion placeholders, smooth animations), position persistence API endpoints with batch update support, optimistic UI updates with rollback on server error.</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 5: Collaboration <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Dec 16-18 & Dec 23 + Jan 6-8 (6 days)</div>
+                        <p><strong>Planned Tasks:</strong> Password Recovery feature, Board Permission Levels implementation, Member Management system</p>
+                        <p><strong>User Stories:</strong> Edit User Profile, Share Board with Users, View Board Members, Remove Board Member, Assign Member to Card, Board Permission Levels</p>
+                        <p>Board sharing API (add/remove/update members with role assignment), user search endpoint for member invitation with autocomplete UI, board members sidebar with role badges and removal capability, four-tier permission system (owner/admin/member/viewer) with controller-level enforcement, card member assignment API with notification triggers, member avatars display on card previews and detail modal, authorization middleware updates for role-based access control on all protected routes, password reset via email with secure tokens.</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 6: Real-Time Features <span class="duration-badge">48h</span></h4>
+                        <div class="dates">Jan 13-15 & Jan 20-22 (6 days)</div>
+                        <p><strong>User Stories:</strong> Real-Time Board Synchronization, Receive Notifications, See Active Users</p>
+                        <p><strong>WebSocket Tasks:</strong> Board UI updates automatically, No page refresh needed, Conflicts handled gracefully, Connection status indicator</p>
+                        <p><strong>Presence Tasks:</strong> Active user avatars displayed on board header, Users appear when they join, Users disappear when they leave/disconnect, Cursor/presence indicators (optional), Support for 10+ simultaneous users</p>
+                        <p>Socket.IO server configuration with JWT authentication middleware, WebSocket connection management (user/board room join/leave events), real-time board synchronization events for all CRUD operations (board/list/card updates broadcast to room), active user presence system with join/leave notifications and avatar display, notification system backend (create notifications for assignments, mentions, comments) and frontend (notification center, unread badge, real-time delivery), connection status indicators with reconnection feedback.</p>
+                    </div>
+                    
+                    <div class="timeline-item">
+                        <h4>Sprint 7: Testing & Delivery <span class="duration-badge">24h</span></h4>
+                        <div class="dates">Jan 27-29 (3 days)</div>
+                        <p>Unit test completion for critical components and utility functions (targeting 90%+ coverage), integration tests for all API endpoints using Supertest with mongodb-memory-server, E2E test scenarios for core user journeys (registration → board creation → card management), bug fixes and performance optimization based on test findings, technical documentation finalization (API reference, architecture guide, data models, WebSocket events), user guide creation with screenshots and workflow explanations, presentation preparation and project delivery.</p>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Detailed Task Breakdown with Hour Estimates</h3>
+                </div>
+
+                <table>
+                    <tr>
+                        <th>Sprint</th>
+                        <th>Task</th>
+                        <th>Dev 1 (h)</th>
+                        <th>Dev 2 (h)</th>
+                        <th>Total</th>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 1: Project Setup (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="6">1</td>
+                        <td>Git repo setup & monorepo structure</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td>Docker Compose configuration</td>
+                        <td>3</td>
+                        <td>3</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>CI/CD pipeline (GitHub Actions)</td>
+                        <td>4</td>
+                        <td>4</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>ESLint/Prettier/Husky setup</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td>MongoDB schema design (5 models)</td>
+                        <td>6</td>
+                        <td>6</td>
+                        <td>12</td>
+                    </tr>
+                    <tr>
+                        <td>Backend/Frontend scaffolding & Redux store</td>
+                        <td>7</td>
+                        <td>7</td>
+                        <td>14</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 2: Authentication & Boards (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="6">2</td>
+                        <td>User registration API + Zod validation</td>
+                        <td>4</td>
+                        <td>–</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td>JWT login/logout + auth middleware</td>
+                        <td>5</td>
+                        <td>–</td>
+                        <td>5</td>
+                    </tr>
+                    <tr>
+                        <td>React auth forms (login/register)</td>
+                        <td>–</td>
+                        <td>6</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>User profile page + avatar upload</td>
+                        <td>3</td>
+                        <td>5</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Board CRUD API endpoints</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Dashboard + board creation modal</td>
+                        <td>–</td>
+                        <td>8</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Password strength validation (zxcvbn)</td>
+                        <td>3</td>
+                        <td>2</td>
+                        <td>5</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Auth tests</td>
+                        <td>3</td>
+                        <td>3</td>
+                        <td>6</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 3: Lists & Cards (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="6">3</td>
+                        <td>List CRUD API + position ordering</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Card CRUD API + nested resources</td>
+                        <td>8</td>
+                        <td>–</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Board view page + horizontal list layout</td>
+                        <td>–</td>
+                        <td>8</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>List component + inline editing</td>
+                        <td>–</td>
+                        <td>5</td>
+                        <td>5</td>
+                    </tr>
+                    <tr>
+                        <td>Card component + preview display</td>
+                        <td>–</td>
+                        <td>6</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Card detail modal (description, checklist, comments)</td>
+                        <td>4</td>
+                        <td>7</td>
+                        <td>11</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>Lists & Cards tests</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>4</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 4: Drag & Drop (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="6">4</td>
+                        <td>List reorder API (batch position update)</td>
+                        <td>5</td>
+                        <td>–</td>
+                        <td>5</td>
+                    </tr>
+                    <tr>
+                        <td>Card move API (within + between lists)</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>@dnd-kit integration + DndContext setup</td>
+                        <td>–</td>
+                        <td>6</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>List horizontal DnD + SortableContext</td>
+                        <td>–</td>
+                        <td>7</td>
+                        <td>7</td>
+                    </tr>
+                    <tr>
+                        <td>Card vertical DnD + cross-list movement</td>
+                        <td>–</td>
+                        <td>10</td>
+                        <td>10</td>
+                    </tr>
+                    <tr>
+                        <td>Visual feedback (overlays, placeholders, animations)</td>
+                        <td>–</td>
+                        <td>6</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td></td>
+                        <td>DnD integration tests</td>
+                        <td>4</td>
+                        <td>4</td>
+                        <td>8</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 5: Collaboration (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="7">5</td>
+                        <td>Board members API (add/remove/update role)</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Permission system (RBAC middleware)</td>
+                        <td>8</td>
+                        <td>–</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>User search API for invitations</td>
+                        <td>3</td>
+                        <td>–</td>
+                        <td>3</td>
+                    </tr>
+                    <tr>
+                        <td>Password reset flow (email + tokens)</td>
+                        <td>–</td>
+                        <td>8</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Member management UI (sidebar, avatars)</td>
+                        <td>–</td>
+                        <td>7</td>
+                        <td>7</td>
+                    </tr>
+                    <tr>
+                        <td>Card assignment API + UI</td>
+                        <td>4</td>
+                        <td>4</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Collaboration tests</td>
+                        <td>4</td>
+                        <td>4</td>
+                        <td>8</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 6: Real-Time Features (48h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="7">6</td>
+                        <td>Socket.IO server + JWT auth middleware</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Room management (board/user rooms)</td>
+                        <td>4</td>
+                        <td>–</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td>CRUD event broadcasting</td>
+                        <td>6</td>
+                        <td>–</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Socket.IO client + Redux listeners</td>
+                        <td>–</td>
+                        <td>8</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Active users presence system</td>
+                        <td>4</td>
+                        <td>6</td>
+                        <td>10</td>
+                    </tr>
+                    <tr>
+                        <td>Notification system (backend + frontend)</td>
+                        <td>4</td>
+                        <td>6</td>
+                        <td>10</td>
+                    </tr>
+                    <tr>
+                        <td>Connection status + reconnection handling</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>4</td>
+                    </tr>
+                    <tr style="background: #f8f9fa;"><td colspan="5"><strong>Sprint 7: Testing & Delivery (24h)</strong></td></tr>
+                    <tr>
+                        <td rowspan="4">7</td>
+                        <td>Unit test completion (90% coverage)</td>
+                        <td>4</td>
+                        <td>4</td>
+                        <td>8</td>
+                    </tr>
+                    <tr>
+                        <td>Integration/E2E tests</td>
+                        <td>3</td>
+                        <td>3</td>
+                        <td>6</td>
+                    </tr>
+                    <tr>
+                        <td>Bug fixes & performance optimization</td>
+                        <td>2</td>
+                        <td>2</td>
+                        <td>4</td>
+                    </tr>
+                    <tr>
+                        <td>Documentation & presentation prep</td>
+                        <td>3</td>
+                        <td>3</td>
+                        <td>6</td>
+                    </tr>
+                    <tr style="background: #e8f5e9; font-weight: bold;">
+                        <td colspan="2">TOTAL</td>
+                        <td>156h</td>
+                        <td>156h</td>
+                        <td>312h</td>
+                    </tr>
+                </table>
+            </div>
+
+            <!-- Section 10: Deliverables & Success Criteria -->
+            <div class="section">
+                <div class="section-header">
+                    <div class="section-number">10</div>
+                    <h2 class="section-title">Deliverables & Success Criteria</h2>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Source Code & Repository</h5>
+                        <p>Complete GitHub repository with full commit history demonstrating incremental development, monorepo structure with /backend and /frontend directories, comprehensive README.md with installation instructions, environment setup, and development commands, Docker Compose configuration for one-command local deployment, GitHub Actions workflows for CI (lint/test/coverage) and CD (Fly.io deployment).</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Technical Documentation</h5>
+                        <p>Architecture overview with system diagrams and layer descriptions, data model documentation with entity relationships and field specifications, REST API reference with all endpoints, request/response formats, and error codes, WebSocket events documentation with payloads and usage examples, environment variables reference for both development and production, deployment guide for Fly.io with MongoDB Atlas setup instructions.</p>
+                    </div>
+                </div>
+
+                <div class="two-column">
+                    <div class="tech-detail-box">
+                        <h5>Application Deliverables</h5>
+                        <p>Functional web application deployed to Fly.io (frontend: epitrello-frontend.fly.dev, backend: epitrello-backend.fly.dev), local Docker-based development environment, demo data seeding scripts for testing, test user accounts for evaluation purposes.</p>
+                    </div>
+                    <div class="tech-detail-box">
+                        <h5>Test Suite</h5>
+                        <p>Automated test suite with 90%+ statement/line coverage and 80%+ branch/function coverage, backend tests using Vitest + Supertest + mongodb-memory-server, frontend tests using Vitest + React Testing Library + MSW, coverage reports generated via vitest --coverage with HTML lcov output.</p>
+                    </div>
+                </div>
+
+                <div class="subsection">
+                    <h3 class="subsection-title">Success Criteria</h3>
+                    <table>
+                        <tr>
+                            <th>Criterion</th>
+                            <th>Measurement</th>
+                        </tr>
+                        <tr>
+                            <td>Core Feature Completion</td>
+                            <td>All Kanban features functional: user auth, board/list/card CRUD, drag-and-drop, member management, real-time sync</td>
+                        </tr>
+                        <tr>
+                            <td>Application Stability</td>
+                            <td>No critical bugs, graceful error handling, responsive UI across desktop/tablet viewports</td>
+                        </tr>
+                        <tr>
+                            <td>Code Quality</td>
+                            <td>90%+ test coverage, zero ESLint warnings, consistent Prettier formatting, passing CI on all merges</td>
+                        </tr>
+                        <tr>
+                            <td>Real-Time Reliability</td>
+                            <td>WebSocket updates propagate within 500ms, automatic reconnection works, no state desync between clients</td>
+                        </tr>
+                        <tr>
+                            <td>Documentation Completeness</td>
+                            <td>All APIs documented, architecture explained, deployment reproducible from docs alone</td>
+                        </tr>
+                        <tr>
+                            <td>Methodology Adherence</td>
+                            <td>Sprint-based development with backlog tracking, TDD practices applied, code reviews on all PRs</td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div class="highlight-box">
+                    <p><strong>Production URLs:</strong> Frontend: <code>https://epitrello-frontend.fly.dev</code> | Backend API: <code>https://epitrello-backend.fly.dev/api</code> | Health Check: <code>/api/health</code></p>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>
