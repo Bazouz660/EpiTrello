@@ -1,8 +1,8 @@
-# Guide de Déploiement Fly.io - EpiTrello
+# Deployment Guide - Fly.io
 
-Ce guide explique comment déployer EpiTrello sur Fly.io avec MongoDB Atlas.
+This guide explains how to deploy EpiTrello to Fly.io with MongoDB Atlas.
 
-## Architecture de Déploiement
+## Deployment Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -23,14 +23,14 @@ Ce guide explique comment déployer EpiTrello sur Fly.io avec MongoDB Atlas.
 └───────────────────────────────────────────────┼──────────────────────────┘
                                                 │
                                                 ▼
-                              ┌─────────────────────────────────┐
-                              │        MONGODB ATLAS            │
-                              │      (Cluster M0 - Gratuit)     │
-                              │       epitrello database        │
-                              └─────────────────────────────────┘
+                              ┌─────────────────────────────────────┐
+                              │        MONGODB ATLAS                │
+                              │      (Cluster M0 - Free)            │
+                              │       epitrello database            │
+                              └─────────────────────────────────────┘
 ```
 
-## URLs de Production
+## Production URLs
 
 | Service      | URL                                          |
 | ------------ | -------------------------------------------- |
@@ -39,79 +39,113 @@ Ce guide explique comment déployer EpiTrello sur Fly.io avec MongoDB Atlas.
 | API          | https://epitrello-backend.fly.dev/api        |
 | Health Check | https://epitrello-backend.fly.dev/api/health |
 
-## Prérequis
+## Prerequisites
 
-- Compte [Fly.io](https://fly.io) (gratuit)
-- Compte [MongoDB Atlas](https://www.mongodb.com/atlas) (gratuit)
-- [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) installé
-- Repository GitHub avec GitHub Actions
+- [Fly.io](https://fly.io) account (free tier available)
+- [MongoDB Atlas](https://www.mongodb.com/atlas) account (free tier available)
+- [Fly CLI](https://fly.io/docs/hands-on/install-flyctl/) installed
+- GitHub repository with GitHub Actions configured
 
-## Configuration Initiale
+---
 
-### 1. Installer Fly CLI
+## Initial Setup
+
+### 1. Install Fly CLI
+
+**Windows (PowerShell):**
 
 ```powershell
-# Windows (PowerShell)
 irm https://fly.io/install.ps1 | iex
+```
 
-# macOS/Linux
+**macOS/Linux:**
+
+```bash
 curl -L https://fly.io/install.sh | sh
 ```
 
-### 2. Se connecter à Fly.io
+### 2. Authenticate with Fly.io
 
 ```bash
 flyctl auth login
 ```
 
-### 3. Créer les applications
+### 3. Create Fly.io Applications
 
 ```bash
-# Backend
+# Create backend application
 flyctl apps create epitrello-backend
 
-# Frontend
+# Create frontend application
 flyctl apps create epitrello-frontend
 ```
 
-### 4. Configurer MongoDB Atlas
+### 4. Set Up MongoDB Atlas
 
-1. Créer un compte sur [mongodb.com/atlas](https://www.mongodb.com/atlas)
-2. Créer un cluster **M0** (gratuit)
-3. **Database Access** → Créer un utilisateur avec mot de passe
-4. **Network Access** → Ajouter `0.0.0.0/0` (autoriser toutes les IPs)
-5. **Connect** → Copier l'URL de connexion
+1. Create an account at [mongodb.com/atlas](https://www.mongodb.com/atlas)
+2. Create a new cluster (M0 free tier is sufficient)
+3. Configure **Database Access**:
+   - Create a database user with username and password
+   - Grant read/write access to the database
+4. Configure **Network Access**:
+   - Add `0.0.0.0/0` to allow connections from anywhere
+   - This is required for Fly.io's dynamic IP addresses
+5. Get the connection string:
+   - Click "Connect" → "Connect your application"
+   - Copy the connection string
 
-L'URL ressemble à :
+**Connection string format:**
 
 ```
-mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/epitrello?retryWrites=true&w=majority
+mongodb+srv://<username>:<password>@<cluster>.mongodb.net/epitrello?retryWrites=true&w=majority
 ```
 
-### 5. Configurer les secrets Fly.io
+### 5. Configure Fly.io Secrets
+
+Set environment variables for the backend:
 
 ```bash
 flyctl secrets set -a epitrello-backend \
-  MONGODB_URI="mongodb+srv://USER:PASSWORD@cluster.xxxxx.mongodb.net/epitrello?retryWrites=true&w=majority" \
-  JWT_SECRET="votre-secret-jwt-32-caracteres-minimum"
+  MONGODB_URI="mongodb+srv://user:password@cluster.mongodb.net/epitrello?retryWrites=true&w=majority" \
+  JWT_SECRET="your-jwt-secret-minimum-32-characters-long"
 ```
 
-### 6. Générer un token de déploiement
+**Required secrets:**
+| Secret | Description |
+|--------|-------------|
+| `MONGODB_URI` | MongoDB Atlas connection string |
+| `JWT_SECRET` | Secret key for JWT signing (min 32 chars) |
 
-1. Aller sur [fly.io/dashboard](https://fly.io/dashboard)
-2. Avatar → Account → Access Tokens
-3. Créer un **Org deploy token**
-4. Copier le token
+**Optional secrets (for email):**
 
-### 7. Configurer GitHub
+```bash
+flyctl secrets set -a epitrello-backend \
+  SMTP_HOST="smtp.example.com" \
+  SMTP_PORT="587" \
+  SMTP_USER="your-smtp-user" \
+  SMTP_PASS="your-smtp-password" \
+  SMTP_FROM_NAME="EpiTrello" \
+  SMTP_FROM_EMAIL="noreply@example.com"
+```
 
-Aller dans **Settings → Secrets and variables → Actions** :
+### 6. Generate Deploy Token
 
-| Secret          | Description                 |
-| --------------- | --------------------------- |
-| `FLY_API_TOKEN` | Token de déploiement Fly.io |
+1. Go to [fly.io/dashboard](https://fly.io/dashboard)
+2. Click your avatar → Account → Access Tokens
+3. Create a new **Org deploy token**
+4. Copy the token
 
-## Fichiers de Configuration
+### 7. Configure GitHub Secrets
+
+Go to your GitHub repository → Settings → Secrets and variables → Actions:
+
+| Secret          | Description                  |
+| --------------- | ---------------------------- |
+| `FLY_API_TOKEN` | The deploy token from step 6 |
+
+---
+
+## Configuration Files
 
 ### Backend (`backend/fly.toml`)
 
@@ -170,67 +204,123 @@ primary_region = 'cdg'
   cpus = 1
 ```
 
-## Pipeline CD (GitHub Actions)
+---
 
-Le workflow `.github/workflows/cd.yml` s'exécute automatiquement sur push vers `main` ou `dev` :
+## Automated Deployment (CI/CD)
 
-1. **Test** - Lint et tests unitaires
-2. **Deploy Backend** - Build et déploiement sur Fly.io
-3. **Deploy Frontend** - Build et déploiement sur Fly.io
-4. **Summary** - Affichage des URLs
+### GitHub Actions Workflow
 
-### Déclenchement manuel
+The `.github/workflows/cd.yml` workflow automatically deploys on push to `main` or `dev`:
 
-1. Aller sur **GitHub → Actions → CD**
-2. Cliquer **"Run workflow"**
-3. Sélectionner l'environnement (staging/production)
+**Pipeline Steps:**
 
-## Déploiement Manuel
+1. **Test** - Run linting and unit tests
+2. **Deploy Backend** - Build and deploy to Fly.io
+3. **Deploy Frontend** - Build and deploy to Fly.io
+4. **Health Check** - Verify backend is responding
+
+### Environments
+
+| Branch | Environment | Apps                                          |
+| ------ | ----------- | --------------------------------------------- |
+| `main` | Production  | epitrello-backend, epitrello-frontend         |
+| `dev`  | Development | epitrello-backend-dev, epitrello-frontend-dev |
+
+### Manual Deployment Trigger
+
+1. Go to GitHub → Actions → CD
+2. Click **"Run workflow"**
+3. Select the environment (dev/production)
+4. Click **"Run workflow"**
+
+---
+
+## Manual Deployment
+
+### Deploy Backend
 
 ```bash
-# Backend
 cd backend
 flyctl deploy --remote-only --app epitrello-backend --ha=false
+```
 
-# Frontend
-cd ../frontend
+### Deploy Frontend
+
+```bash
+cd frontend
 flyctl deploy --remote-only --app epitrello-frontend \
   --build-arg VITE_API_URL=https://epitrello-backend.fly.dev/api \
   --ha=false
 ```
 
-## Commandes Utiles
+> Note: `--ha=false` disables high availability to stay within free tier limits.
+
+---
+
+## Useful Commands
+
+### Application Management
 
 ```bash
-# Voir les apps
+# List all applications
 flyctl apps list
 
-# Logs en temps réel
-flyctl logs -a epitrello-backend
-flyctl logs -a epitrello-frontend
-
-# Status des machines
+# View application status
 flyctl status -a epitrello-backend
 
-# Ouvrir l'app dans le navigateur
+# Open application in browser
 flyctl open -a epitrello-frontend
 
-# Voir les secrets configurés
-flyctl secrets list -a epitrello-backend
-
-# SSH dans une machine
-flyctl ssh console -a epitrello-backend
-
-# Redémarrer l'app
+# Restart an application
 flyctl apps restart epitrello-backend
 ```
 
+### Logs and Debugging
+
+```bash
+# View real-time logs
+flyctl logs -a epitrello-backend
+
+# View frontend logs
+flyctl logs -a epitrello-frontend
+
+# SSH into a running machine
+flyctl ssh console -a epitrello-backend
+```
+
+### Secrets Management
+
+```bash
+# List configured secrets
+flyctl secrets list -a epitrello-backend
+
+# Set a new secret
+flyctl secrets set -a epitrello-backend KEY=value
+
+# Remove a secret
+flyctl secrets unset -a epitrello-backend KEY
+```
+
+### Configuration
+
+```bash
+# View application configuration
+flyctl config show -a epitrello-backend
+
+# View machine configuration
+flyctl machine list -a epitrello-backend
+```
+
+---
+
 ## Monitoring
 
-### Dashboard Fly.io
+### Fly.io Dashboard
 
-- [fly.io/apps/epitrello-backend](https://fly.io/apps/epitrello-backend)
-- [fly.io/apps/epitrello-frontend](https://fly.io/apps/epitrello-frontend)
+Monitor your applications at:
+
+- Backend: [fly.io/apps/epitrello-backend](https://fly.io/apps/epitrello-backend)
+- Frontend: [fly.io/apps/epitrello-frontend](https://fly.io/apps/epitrello-frontend)
 
 ### Health Check
 
@@ -238,62 +328,176 @@ flyctl apps restart epitrello-backend
 curl https://epitrello-backend.fly.dev/api/health
 ```
 
-Réponse attendue :
+**Expected response:**
 
 ```json
 {
   "status": "healthy",
-  "timestamp": "2025-12-16T12:00:00.000Z",
+  "timestamp": "2026-01-13T12:00:00.000Z",
   "uptime": 3600
 }
 ```
 
+---
+
 ## Troubleshooting
 
-### L'app ne démarre pas
+### Application Won't Start
 
-```bash
-# Voir les logs
-flyctl logs -a epitrello-backend
+1. Check the logs:
 
-# Vérifier la config
-flyctl config show -a epitrello-backend
-```
+   ```bash
+   flyctl logs -a epitrello-backend
+   ```
 
-### Erreur de connexion MongoDB
+2. Verify configuration:
 
-1. Vérifier que `MONGODB_URI` est bien configuré :
+   ```bash
+   flyctl config show -a epitrello-backend
+   ```
+
+3. Check secrets are set:
+   ```bash
+   flyctl secrets list -a epitrello-backend
+   ```
+
+### MongoDB Connection Errors
+
+1. Verify `MONGODB_URI` is correctly set:
 
    ```bash
    flyctl secrets list -a epitrello-backend
    ```
 
-2. Vérifier Network Access sur MongoDB Atlas (doit avoir `0.0.0.0/0`)
+2. Check MongoDB Atlas Network Access:
+   - Ensure `0.0.0.0/0` is in the IP whitelist
+   - Or add Fly.io's IP ranges
 
-### Erreur "unauthorized" dans le CD
+3. Verify database user credentials in MongoDB Atlas
 
-1. Régénérer un token sur [fly.io/dashboard](https://fly.io/dashboard) → Access Tokens
-2. Mettre à jour le secret `FLY_API_TOKEN` sur GitHub
+### "Unauthorized" Error in CD Pipeline
 
-### L'app s'arrête après inactivité
+1. Regenerate deploy token at [fly.io/dashboard](https://fly.io/dashboard)
+2. Update `FLY_API_TOKEN` secret in GitHub repository
+3. Re-run the workflow
 
-C'est normal ! `auto_stop_machines = 'stop'` éteint les machines inactives pour économiser les ressources. Elles redémarrent automatiquement à la première requête (~2-3s de latence).
+### Application Stops After Inactivity
 
-Pour garder une machine toujours active :
+This is expected behavior with `auto_stop_machines = 'stop'`. Machines automatically restart on the first request (2-3 second latency).
+
+**To keep a machine always running:**
 
 ```toml
 min_machines_running = 1
 ```
 
-## Coûts
+> Note: This will increase costs beyond the free tier.
 
-Fly.io offre gratuitement :
+### Slow Initial Response
 
-- 3 machines partagées (shared-cpu-1x, 256MB)
-- 160GB de transfert sortant/mois
+Cold starts take 2-5 seconds. Solutions:
 
-Notre configuration utilise 2 machines (backend + frontend), donc reste dans le tier gratuit.
+1. Set `min_machines_running = 1`
+2. Use a health check service to keep the app warm
+3. Accept the latency for free tier usage
 
-## Alternative : Kubernetes (Oracle Cloud)
+---
 
-Pour une architecture plus "entreprise" avec Kubernetes, voir [deployment-k8s.md](deployment-k8s.md).
+## Cost Optimization
+
+### Free Tier Limits
+
+Fly.io's free tier includes:
+
+- 3 shared-cpu-1x machines (256MB RAM each)
+- 160GB outbound transfer per month
+- Unlimited inbound transfer
+
+### Current Configuration
+
+| Resource | Usage                  | Free Tier  |
+| -------- | ---------------------- | ---------- |
+| Machines | 2 (backend + frontend) | 3          |
+| Memory   | 256MB each             | 256MB each |
+| CPU      | Shared                 | Shared     |
+
+### Cost-Saving Tips
+
+1. **Use auto-stop** - Machines stop when idle
+2. **Single region** - Deploy to one region only
+3. **Disable HA** - Use `--ha=false` for single-instance deployment
+4. **Monitor usage** - Check dashboard for resource consumption
+
+---
+
+## Scaling
+
+### Horizontal Scaling
+
+```bash
+# Scale to 2 machines
+flyctl scale count 2 -a epitrello-backend
+
+# Scale back to 1
+flyctl scale count 1 -a epitrello-backend
+```
+
+### Vertical Scaling
+
+```bash
+# Upgrade to more memory
+flyctl scale memory 512 -a epitrello-backend
+
+# View available configurations
+flyctl platform vm-sizes
+```
+
+### Multi-Region Deployment
+
+Add regions to `fly.toml`:
+
+```toml
+primary_region = 'cdg'
+# Additional regions can be added via CLI
+```
+
+```bash
+# Add a region
+flyctl regions add iad -a epitrello-backend
+
+# List regions
+flyctl regions list -a epitrello-backend
+```
+
+---
+
+## Security Best Practices
+
+1. **Rotate secrets regularly** - Update JWT_SECRET periodically
+2. **Use strong secrets** - Generate random strings for JWT_SECRET
+3. **Limit database access** - Use specific IP ranges instead of 0.0.0.0/0 if possible
+4. **Monitor logs** - Watch for suspicious activity
+5. **Enable HTTPS only** - Already configured with `force_https = true`
+
+---
+
+## Backup and Recovery
+
+### Database Backup
+
+MongoDB Atlas handles backups automatically on paid tiers. For free tier:
+
+1. Use `mongodump` for manual backups
+2. Consider upgrading to M2+ for automated backups
+3. Export critical data regularly
+
+### Application Recovery
+
+```bash
+# Redeploy from latest successful build
+flyctl deploy --remote-only -a epitrello-backend
+
+# Rollback to previous release
+flyctl releases list -a epitrello-backend
+flyctl releases rollback <version> -a epitrello-backend
+```
