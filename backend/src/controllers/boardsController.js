@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 
 import { Board } from '../models/Board.js';
+import { Card } from '../models/Card.js';
+import { List } from '../models/List.js';
 import { broadcastToBoard } from '../socket/index.js';
 
 const { Types } = mongoose;
@@ -443,6 +445,53 @@ export const removeBoardMember = async (req, res, next) => {
     );
 
     await board.save();
+
+    // Remove the user from all cards in this board where they are assigned
+    const boardLists = await List.find({ board: board._id });
+    const listIds = boardLists.map((l) => l._id);
+    if (listIds.length > 0) {
+      const updateResult = await Card.updateMany(
+        { list: { $in: listIds }, assignedMembers: userId },
+        { $pull: { assignedMembers: new Types.ObjectId(userId) } },
+      );
+
+      // Broadcast card updates if any cards were modified
+      if (updateResult.modifiedCount > 0) {
+        const updatedCards = await Card.find({
+          list: { $in: listIds },
+        });
+        for (const card of updatedCards) {
+          broadcastToBoard(id, 'card:updated', {
+            card: {
+              id: card._id.toString(),
+              title: card.title,
+              description: card.description,
+              list: card.list?.toString(),
+              position: card.position,
+              labels: card.labels || [],
+              dueDate: card.dueDate || null,
+              checklist: card.checklist || [],
+              assignedMembers: (card.assignedMembers || []).map((m) => m.toString()),
+              comments: (card.comments || []).map((c) => ({
+                id: c.id ?? c._id?.toString() ?? '',
+                text: c.text ?? '',
+                author: c.author ? c.author.toString() : null,
+                createdAt: c.createdAt ?? null,
+              })),
+              activity: (card.activity || []).map((a) => ({
+                id: a.id ?? a._id?.toString() ?? '',
+                message: a.message ?? '',
+                actor: a.actor ? a.actor.toString() : null,
+                createdAt: a.createdAt ?? null,
+              })),
+              archived: card.archived || false,
+            },
+            listId: card.list?.toString(),
+            userId: req.user._id.toString(),
+          });
+        }
+      }
+    }
 
     const members = await getPopulatedMembers(board._id);
 

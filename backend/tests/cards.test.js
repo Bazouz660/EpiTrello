@@ -539,3 +539,142 @@ describe('Card Assigned Members', () => {
     expect(listCardsRes.body.cards[0].assignedMembers[0]).toBe(member.user.id);
   });
 });
+
+describe('Dashboard Endpoints', () => {
+  it('returns dashboard stats for the current user', async () => {
+    const owner = await registerAndLogin();
+
+    // Create a board and a card assigned to the user
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Stats Test Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Card', list: listId });
+    const cardId = cardRes.body.card.id;
+
+    // Assign to self
+    await request(app)
+      .patch(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ assignedMembers: [owner.user.id] });
+
+    // Get dashboard stats
+    const statsRes = await request(app)
+      .get('/api/cards/dashboard-stats')
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    expect(statsRes.status).toBe(200);
+    expect(statsRes.body.stats).toBeDefined();
+    expect(statsRes.body.stats.totalBoards).toBe(1);
+    expect(statsRes.body.stats.ownedBoards).toBe(1);
+    expect(statsRes.body.stats.totalCardsAssigned).toBe(1);
+  });
+
+  it('returns my cards for the current user', async () => {
+    const owner = await registerAndLogin();
+
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'My Cards Board' });
+    const boardId = boardRes.body.board.id;
+
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'My Test Card', list: listId });
+    const cardId = cardRes.body.card.id;
+
+    // Assign to self
+    await request(app)
+      .patch(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ assignedMembers: [owner.user.id] });
+
+    // Get my cards
+    const myCardsRes = await request(app)
+      .get('/api/cards/my-cards')
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    expect(myCardsRes.status).toBe(200);
+    expect(myCardsRes.body.cards).toHaveLength(1);
+    expect(myCardsRes.body.cards[0].title).toBe('My Test Card');
+    expect(myCardsRes.body.cards[0].boardTitle).toBe('My Cards Board');
+  });
+});
+
+describe('Removed Member Card Assignment Bug Fix', () => {
+  it('removes assigned member from cards when member is removed from board', async () => {
+    const owner = await registerAndLogin();
+    const member = await registerAndLogin({
+      username: 'removedmember',
+      email: 'removedmember@example.com',
+    });
+
+    // Create board and add member
+    const boardRes = await request(app)
+      .post('/api/boards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Bug Fix Test Board' });
+    const boardId = boardRes.body.board.id;
+
+    await request(app)
+      .post(`/api/boards/${boardId}/members`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ userId: member.user.id, role: 'member' });
+
+    // Create list and card
+    const listRes = await request(app)
+      .post('/api/lists')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'List', board: boardId });
+    const listId = listRes.body.list.id;
+
+    const cardRes = await request(app)
+      .post('/api/cards')
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ title: 'Assigned Card', list: listId });
+    const cardId = cardRes.body.card.id;
+
+    // Assign member to card
+    await request(app)
+      .patch(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${owner.token}`)
+      .send({ assignedMembers: [member.user.id] });
+
+    // Verify member is assigned
+    let cardCheck = await request(app)
+      .get(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(cardCheck.body.card.assignedMembers).toContain(member.user.id);
+
+    // Remove member from board
+    await request(app)
+      .delete(`/api/boards/${boardId}/members/${member.user.id}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+
+    // Verify member is no longer assigned to the card
+    cardCheck = await request(app)
+      .get(`/api/cards/${cardId}`)
+      .set('Authorization', `Bearer ${owner.token}`);
+    expect(cardCheck.body.card.assignedMembers).not.toContain(member.user.id);
+    expect(cardCheck.body.card.assignedMembers).toHaveLength(0);
+  });
+});

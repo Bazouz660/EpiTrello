@@ -572,3 +572,143 @@ export const addComment = async (req, res, next) => {
     next(error);
   }
 };
+
+// Get all cards assigned to the current user across all boards they have access to
+export const getMyCards = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+    const { dueSoon, overdue, limit = 50 } = req.query;
+
+    // Find all boards the user owns or is a member of
+    const boards = await Board.find({
+      $or: [{ owner: userId }, { 'members.user': userId }],
+    });
+
+    if (boards.length === 0) {
+      return res.status(200).json({ cards: [] });
+    }
+
+    const boardIds = boards.map((b) => b._id);
+    const boardMap = new Map(boards.map((b) => [b._id.toString(), b]));
+
+    // Find all lists in those boards
+    const lists = await List.find({ board: { $in: boardIds } });
+    if (lists.length === 0) {
+      return res.status(200).json({ cards: [] });
+    }
+
+    const listIds = lists.map((l) => l._id);
+    const listMap = new Map(lists.map((l) => [l._id.toString(), l]));
+
+    // Build query for cards assigned to user
+    const query = {
+      list: { $in: listIds },
+      assignedMembers: userId,
+      archived: { $ne: true },
+    };
+
+    // Optional filters for due dates
+    const now = new Date();
+    const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    if (dueSoon === 'true') {
+      query.dueDate = { $gte: now, $lte: oneDayFromNow };
+    } else if (overdue === 'true') {
+      query.dueDate = { $lt: now };
+    }
+
+    const cards = await Card.find(query)
+      .sort({ dueDate: 1, updatedAt: -1 })
+      .limit(Math.min(parseInt(limit, 10) || 50, 100));
+
+    // Enrich cards with board and list info
+    const enrichedCards = cards.map((card) => {
+      const list = listMap.get(card.list.toString());
+      const board = list ? boardMap.get(list.board.toString()) : null;
+      return {
+        ...toResponse(card),
+        listTitle: list?.title ?? 'Unknown List',
+        boardId: board?._id?.toString() ?? null,
+        boardTitle: board?.title ?? 'Unknown Board',
+      };
+    });
+
+    return res.status(200).json({ cards: enrichedCards });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get dashboard stats for the current user
+export const getDashboardStats = async (req, res, next) => {
+  try {
+    const userId = req.user._id;
+
+    // Find all boards the user owns or is a member of
+    const boards = await Board.find({
+      $or: [{ owner: userId }, { 'members.user': userId }],
+    });
+
+    const ownedBoards = boards.filter((b) => b.owner.toString() === userId.toString());
+    const sharedBoards = boards.filter((b) => b.owner.toString() !== userId.toString());
+
+    if (boards.length === 0) {
+      return res.status(200).json({
+        stats: {
+          totalBoards: 0,
+          ownedBoards: 0,
+          sharedBoards: 0,
+          totalCardsAssigned: 0,
+          overdueCards: 0,
+          dueSoonCards: 0,
+          completedChecklistItems: 0,
+          totalChecklistItems: 0,
+        },
+      });
+    }
+
+    const boardIds = boards.map((b) => b._id);
+    const lists = await List.find({ board: { $in: boardIds } });
+    const listIds = lists.map((l) => l._id);
+
+    // Get all cards assigned to user
+    const assignedCards = await Card.find({
+      list: { $in: listIds },
+      assignedMembers: userId,
+      archived: { $ne: true },
+    });
+
+    const now = new Date();
+    const oneDayFromNow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    const overdueCards = assignedCards.filter((c) => c.dueDate && new Date(c.dueDate) < now);
+    const dueSoonCards = assignedCards.filter(
+      (c) => c.dueDate && new Date(c.dueDate) >= now && new Date(c.dueDate) <= oneDayFromNow,
+    );
+
+    // Calculate checklist progress
+    let completedChecklistItems = 0;
+    let totalChecklistItems = 0;
+    for (const card of assignedCards) {
+      for (const item of card.checklist || []) {
+        totalChecklistItems++;
+        if (item.completed) completedChecklistItems++;
+      }
+    }
+
+    return res.status(200).json({
+      stats: {
+        totalBoards: boards.length,
+        ownedBoards: ownedBoards.length,
+        sharedBoards: sharedBoards.length,
+        totalCardsAssigned: assignedCards.length,
+        overdueCards: overdueCards.length,
+        dueSoonCards: dueSoonCards.length,
+        completedChecklistItems,
+        totalChecklistItems,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+};

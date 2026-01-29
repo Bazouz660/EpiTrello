@@ -6,6 +6,7 @@ import { Provider } from 'react-redux';
 import { authReducer } from '../features/auth/authSlice.js';
 import { boardsReducer } from '../features/boards/boardsSlice.js';
 import { cardsReducer } from '../features/cards/cardsSlice.js';
+import { dashboardReducer } from '../features/dashboard/dashboardSlice.js';
 import { listsReducer } from '../features/lists/listsSlice.js';
 
 export const createTestStore = (options = {}) => {
@@ -16,6 +17,7 @@ export const createTestStore = (options = {}) => {
       boards: boardsReducer,
       lists: listsReducer,
       cards: cardsReducer,
+      dashboard: dashboardReducer,
     },
   } = options;
 
