@@ -8,12 +8,18 @@ import {
   deleteCard,
   moveCard,
   addComment,
+  getMyCards,
+  getDashboardStats,
 } from '../controllers/cardsController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
 router.use(authenticate);
+
+// Dashboard endpoints (must come before :id routes)
+router.get('/my-cards', getMyCards);
+router.get('/dashboard-stats', getDashboardStats);
 
 router.post('/', createCard);
 router.get('/', listCards);
