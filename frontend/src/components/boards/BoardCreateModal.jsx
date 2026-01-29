@@ -1,5 +1,6 @@
 import PropTypes from 'prop-types';
 import { useCallback, useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 const DEFAULT_BACKGROUND_COLOR = '#0f172a';
 
@@ -78,7 +79,7 @@ const BoardCreateModal = ({ onClose, onCreate, isCreating, createError }) => {
     });
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="presentation">
       {/* Backdrop */}
       <button
@@ -274,7 +275,8 @@ const BoardCreateModal = ({ onClose, onCreate, isCreating, createError }) => {
           </form>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 };
 

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 import { createAuthInitialState } from '../features/auth/authSlice.js';
 import { createBoardsInitialState } from '../features/boards/boardsSlice.js';
+import { createDashboardInitialState } from '../features/dashboard/dashboardSlice.js';
 import { createTestStore, renderWithProviders } from '../tests/testUtils.jsx';
 
 import HomePage from './HomePage.jsx';
@@ -12,7 +13,11 @@ describe('HomePage', () => {
   it('encourages visitors to sign up when logged out', () => {
     const authState = { ...createAuthInitialState(), initialized: true };
     const store = createTestStore({
-      preloadedState: { auth: authState, boards: createBoardsInitialState() },
+      preloadedState: {
+        auth: authState,
+        boards: createBoardsInitialState(),
+        dashboard: createDashboardInitialState(),
+      },
     });
 
     renderWithProviders(
@@ -22,9 +27,9 @@ describe('HomePage', () => {
       { store },
     );
 
-    expect(screen.getByText('Welcome to EpiTrello')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Sign up' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.getByText(/Organize your projects with/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Get Started Free/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Sign in/i })).toBeInTheDocument();
   });
 
   it('greets the authenticated user and links to boards', () => {
@@ -34,7 +39,11 @@ describe('HomePage', () => {
       user: { id: 'user-42', username: 'Jordan' },
     };
     const store = createTestStore({
-      preloadedState: { auth: authState, boards: createBoardsInitialState() },
+      preloadedState: {
+        auth: authState,
+        boards: createBoardsInitialState(),
+        dashboard: createDashboardInitialState(),
+      },
     });
 
     renderWithProviders(
@@ -45,6 +54,6 @@ describe('HomePage', () => {
     );
 
     expect(screen.getByText('Welcome back, Jordan')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Go to boards' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'View all boards' })).toBeInTheDocument();
   });
 });
